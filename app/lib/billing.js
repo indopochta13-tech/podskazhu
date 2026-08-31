@@ -118,10 +118,9 @@ export function billingPayEnabled() {
   return prodamusConfigured();
 }
 
-/** Локальный прогон без Prodamus — подписка без реальной оплаты. */
+/** Явный dev-режим: VC_BILLING_TEST=1. Не выдаёт PRO — только флаг в API. */
 export function billingTestMode() {
-  if (billingPayEnabled()) return false;
-  return process.env.VC_RUSTORE_TEST === "1" || !process.env.VC_RUSTORE_KEY;
+  return process.env.VC_BILLING_TEST === "1";
 }
 
 function ensureBilling(user) {
@@ -178,11 +177,6 @@ export function validateBillingUserCode(code, requesterId) {
     userId: user.id,
     hasPro: isPro(user),
   };
-}
-
-function verifyPurchaseWithStore(_purchase) {
-  console.error("[billing] сверка чека с RuStore не реализована — покупка отклонена");
-  return false;
 }
 
 function grantedUntil(seen, product) {
@@ -244,19 +238,6 @@ function resolveFamilyMembers(codes, payerId) {
     members.push({ code, userId: check.userId });
   }
   return { ok: true, members };
-}
-
-/** RuStore SDK (legacy): в боевом режиме без сверки не выдаём. */
-export function applyPurchase(user, { productId, purchaseId, status }) {
-  const product = productById(productId);
-  if (!product) return { ok: false, error: "Неизвестный продукт" };
-  const confirmed = String(status || "").toUpperCase();
-  if (!billingTestMode()) {
-    if (!verifyPurchaseWithStore({ productId: product.id, purchaseId, status: confirmed })) {
-      return { ok: false, error: "Покупка не подтверждена платформой" };
-    }
-  }
-  return grantProduct(user, product, purchaseId);
 }
 
 export function createPendingPayment(user, productId, paymentId, amountKopecks) {

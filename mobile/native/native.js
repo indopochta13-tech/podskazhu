@@ -6,6 +6,7 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { App } from "@capacitor/app";
 import { LocalNotifications } from "@capacitor/local-notifications";
+import { PushNotifications } from "@capacitor/push-notifications";
 import { Preferences } from "@capacitor/preferences";
 import { Share } from "@capacitor/share";
 import { SplashScreen } from "@capacitor/splash-screen";
@@ -14,7 +15,6 @@ import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 
 const WidgetBridge = registerPlugin("WidgetBridge");
 const MicBridge = registerPlugin("MicBridge");
-const BillingBridge = registerPlugin("BillingBridge");
 const UpdateBridge = registerPlugin("UpdateBridge");
 
 const ACTION_TYPE = "VC_ITEM";
@@ -266,6 +266,14 @@ async function requestNotifications() {
     permission = res.display === "granted" ? "granted" : "denied";
   } catch {
     permission = "denied";
+  }
+  if (permission === "granted") {
+    try {
+      const pushPerm = await PushNotifications.requestPermissions();
+      if (pushPerm.receive === "granted") await registerFcmToken();
+    } catch {
+      // FCM не настроен — локальные уведомления всё равно работают.
+    }
   }
   return permission === "granted";
 }
@@ -649,6 +657,59 @@ const speech = {
   },
 };
 
+async function handlePushAction(notification) {
+  const data = notification?.data || {};
+  if (data.tag === "support" || data.url?.includes("go=support")) {
+    if (supportOpenHandler) supportOpenHandler();
+    else pendingSupportOpen = true;
+    return;
+  }
+  const itemId = data.itemId;
+  if (itemId) {
+    if (openItemHandler) openItemHandler(itemId);
+    else pendingOpenItem = itemId;
+  }
+}
+
+let fcmToken = "";
+let fcmListenersReady = false;
+
+async function sendFcmTokenToServer() {
+  if (!fcmToken || !token()) return;
+  await apiCall("/push/fcm-register", { token: fcmToken });
+}
+
+async function registerFcmToken() {
+  if (permission !== "granted") return;
+  try {
+    if (!fcmListenersReady) {
+      fcmListenersReady = true;
+      await PushNotifications.addListener("registration", async ({ value }) => {
+        if (!value) return;
+        fcmToken = value;
+        await sendFcmTokenToServer();
+      });
+      await PushNotifications.addListener("registrationError", () => {});
+      await PushNotifications.addListener("pushNotificationReceived", notification => {
+        const data = notification?.data || {};
+        if (data.tag === "support") {
+          liveNoticeHandler?.({
+            title: notification?.title || data.title || "Ответ поддержки",
+            body: notification?.body || data.body || "",
+            url: data.url || "/?go=support",
+          });
+        }
+      });
+      await PushNotifications.addListener("pushNotificationActionPerformed", event => {
+        handlePushAction(event.notification);
+      });
+    }
+    await PushNotifications.register();
+  } catch {
+    // google-services.json может отсутствовать — локальные напоминания работают без FCM.
+  }
+}
+
 async function handleNotificationAction(event) {
   const extra = event.notification?.extra || {};
   // У ответа поддержки записи нет: он ведёт на переписку.
@@ -750,6 +811,7 @@ async function keepTokenSafe() {
         apiBase: window.VC_API_BASE || "",
         token: value || "",
       }).catch(() => {});
+      if (value) sendFcmTokenToServer().catch(() => {});
     }
   };
   const removeItem = localStorage.removeItem.bind(localStorage);
@@ -767,6 +829,8 @@ async function init() {
   await checkPermission();
 
   await LocalNotifications.addListener("localNotificationActionPerformed", handleNotificationAction);
+
+  await registerFcmToken();
 
   // Уведомление сработало при открытом приложении: шторку человек не увидит, показываем баннер внутри.
   await LocalNotifications.addListener("localNotificationReceived", notification => {
@@ -824,6 +888,7 @@ if (Capacitor.isNativePlatform()) {
     permissionState: () => permission,
     requestNotifications,
     syncReminders,
+    syncFcmToken: sendFcmTokenToServer,
     setSounds,
     testNotification,
     notifySupport,
@@ -843,34 +908,6 @@ if (Capacitor.isNativePlatform()) {
       if (!pendingSupportOpen) return;
       pendingSupportOpen = false;
       cb();
-    },
-    // Оплата подписки идёт через RuStore Pay SDK: приложение только передаёт результат серверу.
-    billing: {
-      available: async () => {
-        try {
-          const res = await BillingBridge.available();
-          return Boolean(res?.available);
-        } catch {
-          return false;
-        }
-      },
-      purchase: async productId => {
-        const res = await BillingBridge.purchase({ productId });
-        return {
-          purchaseId: res?.purchaseId || "",
-          productId: res?.productId || productId,
-          status: res?.status || "",
-          error: res?.error || "",
-        };
-      },
-      purchases: async () => {
-        try {
-          const res = await BillingBridge.purchases();
-          return Array.isArray(res?.purchases) ? res.purchases : [];
-        } catch {
-          return [];
-        }
-      },
     },
     onJoinCode: cb => {
       joinCodeHandler = cb;

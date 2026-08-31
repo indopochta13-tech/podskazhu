@@ -14,6 +14,7 @@ const EMPTY = () => ({
   users: {},
   items: {},
   subs: {},
+  fcmTokens: {},
   tokens: {},
   rooms: {},
   // Жалобы на присланные записи: их обязана видеть модерация,

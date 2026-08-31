@@ -22,6 +22,7 @@ import {
 } from "./lib/dialog.js";
 import { safeZone, zonedParts, itemUtc, remindUtc, addDays, addMonths, weekdayOf, compareDates, zonedToUtc } from "./lib/time.js";
 import { initPush, publicKey, addSubscription, removeSubscription, sendTo } from "./lib/push.js";
+import { initFcm, addFcmToken, removeFcmToken, sendFcmTo, fcmReady } from "./lib/fcm.js";
 import { templateById, templateDrafts, templatesPublic } from "./lib/templates.js";
 import { CARE_ROUTINE, CARE_ROUTINE_SOURCE, careDefaultTime } from "./lib/care-routine.js";
 import {
@@ -35,13 +36,11 @@ import { registerSharedListRoutes, sharedListsPayload, tickSharedLaterReminders,
 import { parseSharedList, taskFromWidgetSpeech } from "./lib/shared-list-parse.js";
 import { isHeavy } from "./public/voice.js";
 import {
-  applyPurchase,
   billingState,
   billingTestMode,
   cancelFamilySubscription,
   createFamilyPendingPayment,
   createPendingPayment,
-  dropSubscription,
   familyPriceBreakdown,
   familyTotalPrice,
   grantProdamusPaid,
@@ -100,6 +99,7 @@ const MIME = {
 
 load();
 initPush();
+initFcm();
 
 const attempts = new Map();
 // Нагрузочный прогон «пятьдесят человек» приходит с одного адреса: там счётчик мешает, а не защищает.
@@ -2725,6 +2725,20 @@ route("POST", /^\/api\/push\/unsubscribe$/, async (ctx) => {
   return { status: 200, body: { ok: true } };
 });
 
+route("POST", /^\/api\/push\/fcm-register$/, async (ctx) => {
+  const token = String(ctx.body?.token || "").trim();
+  if (!token || token.length > 512) {
+    return { status: 400, body: { ok: false, error: "Некорректный токен" } };
+  }
+  addFcmToken(ctx.user.id, token);
+  return { status: 200, body: { ok: true, fcm: fcmReady() } };
+});
+
+route("POST", /^\/api\/push\/fcm-unregister$/, async (ctx) => {
+  removeFcmToken(ctx.user.id, ctx.body?.token);
+  return { status: 200, body: { ok: true } };
+});
+
 route("POST", /^\/api\/push\/test$/, async (ctx) => {
   const res = await sendTo(ctx.user.id, {
     title: "Проверка",
@@ -2746,6 +2760,7 @@ route("DELETE", /^\/api\/account$/, async (ctx) => {
     if (rec.userId === userId) delete db.tokens[token];
   }
   delete db.subs[userId];
+  delete db.fcmTokens?.[userId];
 
   // Убираем себя из чужих списков, чтобы там не остался мёртвый идентификатор.
   // Блокировки чистим по той же причине: код освобождается и может достаться другому человеку.
@@ -2963,33 +2978,6 @@ route("POST", /^\/api\/billing\/prodamus\/webhook$/, async (ctx) => {
   }
   return { status: 200, raw: "success", contentType: "text/plain; charset=utf-8" };
 }, { auth: false, rawBody: true });
-
-// RuStore SDK (legacy / тест): клиент присылает purchaseId после оплаты в магазине.
-route("POST", /^\/api\/billing\/purchase$/, async (ctx) => {
-  const res = applyPurchase(ctx.user, {
-    productId: ctx.body?.productId,
-    purchaseId: ctx.body?.purchaseId,
-    status: ctx.body?.status,
-  });
-  if (!res.ok) return { status: 400, body: { error: res.error } };
-  return { status: 200, body: billingState(ctx.user) };
-});
-
-route("POST", /^\/api\/billing\/restore$/, async (ctx) => {
-  const list = Array.isArray(ctx.body?.purchases) ? ctx.body.purchases.slice(0, 20) : [];
-  let restored = 0;
-  for (const purchase of list) {
-    const res = applyPurchase(ctx.user, {
-      productId: purchase?.productId,
-      purchaseId: purchase?.purchaseId,
-      status: purchase?.status,
-    });
-    if (res.ok) restored += 1;
-  }
-  restored += restorePurchasesForUser(ctx.user);
-  if (!restored && !planFor(ctx.user).active) dropSubscription(ctx.user);
-  return { status: 200, body: { restored, ...billingState(ctx.user) } };
-});
 
 route("POST", /^\/api\/billing\/restore-purchases$/, async (ctx) => {
   const restored = restorePurchasesForUser(ctx.user);
@@ -3330,15 +3318,18 @@ setInterval(() => {
 startTelegram({
   onAnswer: async ({ userId, code, text }) => {
     console.warn(`[support] ответ ${code}`);
-    await sendTo(userId, {
+    const payload = {
       title: "Ответ поддержки",
       body: text.length > 120 ? `${text.slice(0, 119)}…` : text,
       tag: "support",
       url: "/?go=support",
-    });
+    };
+    await sendTo(userId, payload);
+    await sendFcmTo(userId, payload);
   },
 });
 if (telegramReady()) console.log("[telegram] поддержка подключена к боту");
+if (fcmReady()) console.log("[fcm] push-уведомления Android подключены");
 
 // Страховка: любой недосмотренный throw в асинхронном обработчике иначе убивает процесс целиком.
 // Пишем в журнал и живём дальше — systemd перезапуск не заменяет обработку ошибки.
@@ -3361,7 +3352,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 server.listen(PORT, HOST, () => {
   console.log(`[voicecapture] слушаю http://${HOST}:${PORT}`);
   if (billingTestMode()) {
-    console.warn("[billing] ВНИМАНИЕ: тестовый режим — подписочные функции открыты всем без оплаты");
+    console.warn("[billing] VC_BILLING_TEST=1 — dev-флаг в API, PRO только через Prodamus");
   } else if (pdm.isConfigured()) {
     console.log("[billing] Prodamus подключён — оплата через payform");
   }

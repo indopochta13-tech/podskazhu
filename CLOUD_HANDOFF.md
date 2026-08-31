@@ -172,7 +172,7 @@ npm run apk:release
 │       ├── ReminderAlarmReceiver.java
 │       ├── MainActivity.java
 │       ├── UpdateBridge.java
-│       └── BillingBridge.java
+│       └── (FCM через @capacitor/push-notifications)
 │
 ├── qa/                       ← скрипты проверки auth/fix
 ├── docs/                     ← pipeline/UX документы
@@ -227,6 +227,34 @@ ssh -i ~/.ssh/id_rei_do -o IdentitiesOnly=yes root@201.51.3.63 \
 | [`DOMAIN_MIGRATION.md`](DOMAIN_MIGRATION.md) | Миграция zapisala → soulvoicee.ru |
 | [`etap-2-harakter-i-golos.md`](etap-2-harakter-i-golos.md) | Этап 2 — голос |
 | [`etap-3-vneshniy-vid.md`](etap-3-vneshniy-vid.md) | Этап 3 — UI |
+
+---
+
+## 10. FCM — push при ответе поддержки
+
+Оплата подписки идёт через **Prodamus** (`VC_PRODAMUS_*`). RuStore Pay SDK не используется.
+
+### Android (клиент)
+
+1. Firebase Console → создать проект → добавить Android-приложение `ru.soulvoice.app`.
+2. Скачать `google-services.json` → положить в `mobile/android/app/google-services.json` (шаблон: `google-services.json.example`).
+3. Пересобрать APK: `cd mobile && npm run apk:release`.
+
+FCM регистрируется автоматически после разрешения уведомлений (`@capacitor/push-notifications`).
+
+### Сервер
+
+1. Firebase Console → Project settings → Service accounts → **Generate new private key**.
+2. Положить JSON на сервер, указать в `/etc/voicecapture.env`:
+   - `VC_FIREBASE_SERVICE_ACCOUNT_FILE=/etc/voicecapture-firebase.json`
+3. `npm install` в `app/` (зависимость `firebase-admin`).
+4. Перезапуск: `systemctl restart voicecapture` — в журнале должно быть `[fcm] push-уведомления Android подключены`.
+
+При ответе оператора в Telegram пользователю уходит FCM + web-push (если был подписан).
+
+### Тестовый режим биллинга
+
+По умолчанию **выключен**. PRO только через оплату Prodamus. Dev-флаг: `VC_BILLING_TEST=1` (не выдаёт PRO, только метка в API).
 
 ---
 

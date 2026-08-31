@@ -720,76 +720,24 @@ async function main() {
     billing.status === 200 && billing.data?.plan === "free" && (billing.data?.products || []).length === 2,
     JSON.stringify(billing.data).slice(0, 140));
   check(
-    "пока оплата не подключена, тестовый режим",
-    billing.data?.testMode === true,
+    "по умолчанию тестовый режим выключен",
+    billing.data?.testMode === false,
     JSON.stringify(billing.data?.testMode));
 
-  // С боевым ключом магазина сверка чека обязательна.
-  await withServer({ VC_RUSTORE_KEY: "live-key" }, async api => {
+  await withServer({ VC_BILLING_TEST: "1" }, async api => {
     const me = (await api("/start", { method: "POST", body: { tz: "Europe/Moscow" } })).data;
-    const live = await api("/billing", { as: me.token });
+    const dev = await api("/billing", { as: me.token });
     check(
-      "с подключённой оплатой тестовый режим выключен",
-      live.data?.testMode === false,
-      JSON.stringify(live.data?.testMode));
+      "VC_BILLING_TEST=1 включает dev-флаг",
+      dev.data?.testMode === true,
+      JSON.stringify(dev.data?.testMode));
   });
 
-  const badPurchase = await call("/billing/purchase", { method: "POST", body: { productId: "gold", purchaseId: "x1" } });
-  check("выдуманный продукт не активирует подписку", badPurchase.status === 400, String(badPurchase.status));
-
-  // Номер чека уникален для прогона: сервер помнит потраченные чеки вечно,
-  // и на повторном прогоне по той же базе фиксированный номер был бы уже занят.
-  const receipt = `test-purchase-${Date.now().toString(36)}`;
-  const purchase = await call("/billing/purchase", {
-    method: "POST",
-    body: { productId: "pro_month", purchaseId: receipt, status: "CONFIRMED" },
-  });
+  const restoreEmpty = await call("/billing/restore-purchases", { method: "POST", body: {} });
   check(
-    "покупка включает «Про»",
-    purchase.status === 200 && purchase.data?.active === true,
-    JSON.stringify(purchase.data?.plan || purchase.data).slice(0, 140));
-
-  const samePurchase = await call("/billing/purchase", {
-    method: "POST",
-    body: { productId: "pro_month", purchaseId: receipt, status: "CONFIRMED" },
-  });
-  check(
-    "та же покупка не продлевает срок дважды",
-    samePurchase.status === 200 && samePurchase.data?.until === purchase.data?.until,
-    `${purchase.data?.until} → ${samePurchase.data?.until}`);
-
-  const stranger = await call("/start", { method: "POST", body: { tz: "Europe/Moscow" }, auth: false });
-  const stolen = await call("/billing/purchase", {
-    method: "POST",
-    body: { productId: "pro_month", purchaseId: receipt, status: "CONFIRMED" },
-    as: stranger.data.token,
-  });
-  check("чужой чек подписку не включает", stolen.status === 400, JSON.stringify(stolen.data));
-
-  // Переустановка без ключа переноса заводит новый аккаунт, а чек в магазине остаётся тот же:
-  // «Про» должно вернуться по восстановлению покупок, но ровно до прежней даты.
-  const gone = (await call("/start", { method: "POST", body: { tz: "Europe/Moscow" }, auth: false })).data;
-  const goneReceipt = `test-purchase-gone-${Date.now().toString(36)}`;
-  const paid = await call("/billing/purchase", {
-    method: "POST",
-    body: { productId: "pro_month", purchaseId: goneReceipt, status: "CONFIRMED" },
-    as: gone.token,
-  });
-  await call("/account", { method: "DELETE", as: gone.token });
-  const fresh = (await call("/start", { method: "POST", body: { tz: "Europe/Moscow" }, auth: false })).data;
-  const restored = await call("/billing/restore", {
-    method: "POST",
-    body: { purchases: [{ productId: "pro_month", purchaseId: goneReceipt, status: "CONFIRMED" }] },
-    as: fresh.token,
-  });
-  check(
-    "после переустановки оплата возвращается",
-    restored.status === 200 && restored.data?.restored === 1 && restored.data?.active === true,
-    JSON.stringify(restored.data?.plan || restored.data).slice(0, 140));
-  check(
-    "восстановление не добавляет лишний месяц",
-    restored.data?.until === paid.data?.until,
-    `${paid.data?.until} → ${restored.data?.until}`);
+    "восстановление без покупок не ломает тариф",
+    restoreEmpty.status === 200 && restoreEmpty.data?.plan === "free",
+    JSON.stringify(restoreEmpty.data?.plan));
 
   const state = await call("/state");
   console.log("\n  Записи в итоге:");

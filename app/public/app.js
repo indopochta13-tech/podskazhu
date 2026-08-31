@@ -1540,6 +1540,7 @@ function absorb(data) {
   // В приложении напоминания ставит сам телефон — они срабатывают и без сети.
   pushSoundsToPhone();
   if (NATIVE && Array.isArray(state.items)) NATIVE.syncReminders(state.items, state.user?.settings);
+  if (NATIVE?.syncFcmToken && state.user) NATIVE.syncFcmToken();
   // Виджет обновляем только после полного списка items — иначе пустой промежуточный
   // снимок после обновления APK затирает живые заметки на рабочем столе.
   if (NATIVE?.updateWidget && state.user && Array.isArray(data.items)) {

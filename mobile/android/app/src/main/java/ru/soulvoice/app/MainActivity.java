@@ -18,7 +18,6 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(WidgetBridge.class);
         registerPlugin(MicBridge.class);
-        registerPlugin(BillingBridge.class);
         registerPlugin(UpdateBridge.class);
         super.onCreate(savedInstanceState);
         WidgetBridge.remember(getIntent());
