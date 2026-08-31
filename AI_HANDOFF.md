@@ -1,5 +1,7 @@
 # SoulVoice — handoff для другого ИИ
 
+> **Cloud Agent:** начни с [`CLOUD_HANDOFF.md`](CLOUD_HANDOFF.md) — split, rebrand, правила и текущее состояние (31 Aug 2026).
+
 Документ, чтобы сразу подключиться к живому серверу и коду и помогать без разведки с нуля.
 
 Бренд в UI: **SoulVoice**. Пакет Android: `ru.soulvoice.app`. Код и сервис на сервере часто называются **voicecapture** (историческое имя каталога).
