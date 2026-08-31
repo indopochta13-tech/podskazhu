@@ -1,0 +1,23 @@
+{
+  "name": "SoulVoice",
+  "short_name": "SoulVoice",
+  "description": "Скажи — SoulVoice запомнит. Напомнит вовремя.",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "launch_handler": { "client_mode": ["navigate-existing", "auto"] },
+  "background_color": "#0a120a",
+  "theme_color": "#0a120a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Запись голосом", "short_name": "Запись", "url": "/?go=record", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Написать в чат", "short_name": "Чат", "url": "/?go=chat", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Сегодня", "short_name": "Сегодня", "url": "/?go=review", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

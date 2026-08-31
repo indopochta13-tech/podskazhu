@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Корзина — tint inkMuted через WidgetLook.applyRowIcons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9.4,3.8h5.2c0.35,0 0.65,0.22 0.76,0.55L15.7,5.4h2.9c0.44,0 0.8,0.36 0.8,0.8v0.7c0,0.44 -0.36,0.8 -0.8,0.8H5.4c-0.44,0 -0.8,-0.36 -0.8,-0.8v-0.7c0,-0.44 0.36,-0.8 0.8,-0.8h2.9l0.34,-1.05c0.11,-0.33 0.41,-0.55 0.76,-0.55zM10.6,3.8c0,-0.55 0.45,-1 1,-1h0.8c0.55,0 1,0.45 1,1v0.2h-2.8V3.8z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6.2,8.5h11.6v9.2c0,1.4 -1.15,2.55 -2.55,2.55H8.75C7.35,20.25 6.2,19.1 6.2,17.7V8.5z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9.5,10.3h1.35v7.2H9.5zM11.35,10.3h1.3v7.2h-1.3zM13.15,10.3H14.5v7.2h-1.35z" />
+</vector>

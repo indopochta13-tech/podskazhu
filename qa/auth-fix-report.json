@@ -1,0 +1,213 @@
+{
+  "base": "http://127.0.0.1:8791",
+  "when": "2026-08-03T01:23:23.802Z",
+  "ids": {
+    "A": "JA7XVH",
+    "keyA": "3H4GE-79HNK-FWZ7Y-P7N4J",
+    "B": "3Z7M7E"
+  },
+  "steps": [
+    {
+      "id": "0-загрузка",
+      "title": "Чистый профиль, отдаётся код v6",
+      "status": "исправлено",
+      "observed": [
+        "главная: HTTP 200",
+        "подключено: /app.js?v=6, /styles.css?v=6; записей в localStorage: 0",
+        "в отданном app.js: senderName = true, защита 401 = true",
+        "в отданном styles.css остался word-break: break-all у ключа: false",
+        "сервер отдаёт исправленный код, профиль пустой"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-01-login.png"
+      ]
+    },
+    {
+      "id": "4-ключ",
+      "title": "Экран «Четыре шага»: ключ переноса читается целиком",
+      "status": "исправлено",
+      "observed": [
+        "ID первой сессии JA7XVH, ключ 3H4GE-79HNK-FWZ7Y-P7N4J",
+        "шрифт 16px, межбуквенный 0.96px, word-break: normal, overflow-wrap: break-word",
+        "ключ шириной 274px в блоке 302px, строк 1: [\"3H4GE-79HNK-FWZ7Y-P7N4J\"]",
+        "разрыв посреди группы: нет; обрезка: false, вылет за блок: false",
+        "ключ помещается в одну строку"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-02-four-steps.png"
+      ]
+    },
+    {
+      "id": "12а-id",
+      "title": "Входящее у незнакомого отправителя: после «от» стоит ID",
+      "status": "исправлено",
+      "observed": [
+        "ID второй сессии 3Z7M7E",
+        "первая сессия добавила второго: Добавлено",
+        "отправка: Отправлено · 1",
+        "плашка во второй сессии: «Вам отправили 1 — посмотреть»",
+        "карточка входящего: «Совещание» / «завтра · 10:00 · от JA7XVH»",
+        "в списке второй сессии людей: 0; отправитель с сервера: [{\"code\":\"JA7XVH\"}]",
+        "после «от» стоит ID отправителя JA7XVH"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-03-incoming-shows-id.png"
+      ]
+    },
+    {
+      "id": "12б-пометка",
+      "title": "Входящее от человека из своего списка: показывается пометка",
+      "status": "исправлено",
+      "observed": [
+        "вторая сессия добавила первого с пометкой «Начальник»: Добавлено",
+        "карточка входящего теперь: «завтра · 10:00 · от Начальник»",
+        "вторая отправка: Отправлено · 1",
+        "оба входящих: [{\"title\":\"Совещание\",\"meta\":\"завтра · 10:00 · от Начальник\"},{\"title\":\"Позвонить в банк\",\"meta\":\"завтра · 12:00 · от Начальник\"}]",
+        "вместо ID показывается пометка «Начальник» и для старой, и для новой записи"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-04-incoming-shows-label.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-05-incoming-both-labeled.png"
+      ]
+    },
+    {
+      "id": "13а-ключ",
+      "title": "Неверный ключ: видимое «Ключ не подходит», форма и текст сохраняются",
+      "status": "исправлено",
+      "observed": [
+        "сообщение: «Ключ не подходит» (видно на экране: true)",
+        "форма ключа осталась открытой: true, в поле: «AAAAA-BBBBB-CCCCC-DDDDD», переключатель «Начать заново», кнопка активна: true",
+        "показано «Ключ не подходит», форма и набранный текст на месте"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-06-bad-key-error.png"
+      ]
+    },
+    {
+      "id": "13б-верный",
+      "title": "Верный ключ в нижнем регистре после неудачной попытки",
+      "status": "исправлено",
+      "observed": [
+        "ввожу 3h4ge-79hnk-fwz7y-p7n4j в ту же форму, не перезагружая страницу",
+        "после входа: экран «Четыре шага», ID «JA7XVH»",
+        "записи в перенесённой сессии: Совещание | Позвонить в банк; ID на главной: JA7XVH",
+        "ключ в нижнем регистре пускает в ту же учётку с её записями"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-07-restored-after-retry.png"
+      ]
+    },
+    {
+      "id": "сессия",
+      "title": "Испорченный токен: сессия сбрасывается и возвращает на экран входа",
+      "status": "НЕ исправлено",
+      "observed": [
+        "до порчи токена: домашний экран = true, токен начинается на 90Rb8nz5…",
+        "после запроса с испорченным токеном: экран входа = false, кнопка «undefined», токен в localStorage: \"ИСПОРЧЕННЫЙ-ТОКЕН-123\"",
+        "после перезагрузки с испорченным токеном: экран входа = true, домашний = false",
+        "сброс сессии сломался"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-08-expired-token-auth.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-09-expired-token-reload.png"
+      ]
+    },
+    {
+      "id": "регрессия",
+      "title": "Настройки и вид ключа там же, вход и основные экраны работают",
+      "status": "исправлено",
+      "observed": [
+        "ключ в настройках: строк 1: [\"3H4GE-79HNK-FWZ7Y-P7N4J\"], ширина 344px в блоке 372px",
+        "экран «Настройки», ID «JA7XVH», ключ «3H4GE-79HNK-FWZ7Y-P7N4J», кнопка «Скрыть», пункт «Люди и группы»: true",
+        "настройки в порядке, ключ виден целиком"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-fix-10-settings-key.png"
+      ]
+    },
+    {
+      "id": "ошибки",
+      "title": "Ошибки JS и ответы 4xx/5xx",
+      "status": "исправлено",
+      "observed": [
+        "ожидаемых отказов (неверный ключ, испорченный токен): 2",
+        "прочих сетевых ошибок: 0",
+        "исключений JS: 0, console error/warning: 1",
+        "настоящих ошибок JS и сети нет"
+      ],
+      "defects": [],
+      "shots": [],
+      "expected": [
+        {
+          "session": "C",
+          "step": "13а-ключ",
+          "kind": "cdp",
+          "status": 401,
+          "url": "http://127.0.0.1:8791/api/restore"
+        },
+        {
+          "session": "C",
+          "step": "13а-ключ",
+          "kind": "http",
+          "status": 401,
+          "method": "POST",
+          "url": "http://127.0.0.1:8791/api/restore",
+          "body": "{\"error\":\"Ключ не подходит\"}"
+        }
+      ],
+      "realNet": []
+    }
+  ],
+  "jsErrors": [],
+  "consoleErrors": [
+    {
+      "session": "C",
+      "step": "13а-ключ",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "location": {
+        "url": "http://127.0.0.1:8791/api/restore",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    }
+  ],
+  "netErrors": [
+    {
+      "session": "C",
+      "step": "13а-ключ",
+      "kind": "cdp",
+      "status": 401,
+      "url": "http://127.0.0.1:8791/api/restore"
+    },
+    {
+      "session": "C",
+      "step": "13а-ключ",
+      "kind": "http",
+      "status": 401,
+      "method": "POST",
+      "url": "http://127.0.0.1:8791/api/restore",
+      "body": "{\"error\":\"Ключ не подходит\"}"
+    }
+  ],
+  "logEntries": [
+    {
+      "session": "C",
+      "step": "13а-ключ",
+      "level": "error",
+      "source": "network",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "url": "http://127.0.0.1:8791/api/restore"
+    }
+  ]
+}

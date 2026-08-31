@@ -1,0 +1,419 @@
+{
+  "base": "http://127.0.0.1:8791",
+  "when": "2026-08-03T00:51:46.795Z",
+  "ids": {
+    "first": "HCPYCG",
+    "transferKey": "K4JM3-9G4QQ-3JLWG-WMC22",
+    "second": "G247U8"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "title": "Экран входа: кнопка «Начать», пояснение, ссылка на ключ переноса, нет полей Имя/PIN",
+      "status": "прошло",
+      "observed": [
+        "кнопка: «Начать», переключатель: «У меня есть ключ переноса»",
+        "пояснение: «Ничего заполнять не нужно. Приложение выдаст вам личный ID — по нему вас добавляют в группы, чтобы присылать напоминания.»",
+        "видимых полей ввода: нет; все input в DOM: key",
+        "экран входа соответствует ожиданию"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-01-login.png"
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Переключение «У меня есть ключ переноса» ↔ «Начать заново»",
+      "status": "прошло",
+      "observed": [
+        "после первого нажатия: поле «Ключ переноса» (подсказка XXXXX-XXXXX-XXXXX-XXXXX), кнопка «Забрать свои записи», переключатель «Начать заново»",
+        "после второго нажатия: видна форма «Начать» = true, переключатель «У меня есть ключ переноса»",
+        "переключение работает в обе стороны"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-02-restore-form.png"
+      ]
+    },
+    {
+      "id": 3,
+      "title": "«Начать» → экран «Четыре шага», выдача ID и ключа переноса",
+      "status": "прошло",
+      "observed": [
+        "заголовок экрана: «Четыре шага»",
+        "шаг 1: «Ваш ID» код «HCPYCG» кнопка «Скопировать ID» (отмечен выполненным)",
+        "шаг 2: «Сохраните ключ переноса» код «K4JM3-9G4QQ-3JLWG-WMC22» кнопка «Скопировать ключ»",
+        "шаг 3: «Поставьте на экран «Домой»»",
+        "шаг 4: «Разрешите уведомления» кнопка «Разрешить уведомления»",
+        "ID = HCPYCG, ключ = K4JM3-9G4QQ-3JLWG-WMC22",
+        "формат ID верный, формат ключа верный",
+        "все четыре шага на месте, ID и ключ выданы в нужном формате",
+        "ключ в блоке: ширина 274px в блоке 302px, строк 2, обрезка по ширине: false"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-03-four-steps.png"
+      ]
+    },
+    {
+      "id": 4,
+      "title": "«Скопировать ключ» → всплывающее сообщение и отметка шага 2",
+      "status": "прошло",
+      "observed": [
+        "всплывающее: «Ключ скопирован — сохраните его у себя»",
+        "шаг 2 «выполнен» до нажатия: false, после: true",
+        "в буфере обмена: «K4JM3-9G4QQ-3JLWG-WMC22»",
+        "сообщение показано, шаг 2 отмечен выполненным"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-04-key-copied.png"
+      ]
+    },
+    {
+      "id": 5,
+      "title": "«Всё, начинаем» → домашний экран с «Ваш ID»",
+      "status": "прошло",
+      "observed": [
+        "шапка домашнего экрана: «Ваш ID HCPYCG»",
+        "вверху «Ваш ID» и код, приветствия по имени нет"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-05-home.png"
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Настройки: ID, блок ключа переноса, «Показать»/«Скопировать», «Люди и группы», «Выйти»",
+      "status": "прошло",
+      "observed": [
+        "экран «Настройки», ID вверху «HCPYCG», кнопка «Скопировать ID»",
+        "блок ключа: «•••••-•••••-•••••-•••••», кнопки «Показать» / «Скопировать»",
+        "после «Показать»: ключ «K4JM3-9G4QQ-3JLWG-WMC22», кнопка «Скрыть»",
+        "пункт «Люди и группы»: есть; «Выйти» подпись: «вернуться можно только по ключу переноса»",
+        "всё на месте: ID, скрытый ключ, раскрытие, «Люди и группы», подпись у «Выйти»",
+        "ключ в настройках: ширина 344px в блоке 372px, строк 1, шрифт 17px, обрезка: false"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-06a-settings-key-hidden.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-06b-settings-key-shown.png"
+      ]
+    },
+    {
+      "id": 7,
+      "title": "«Люди и группы»: формы добавления человека и групп, создание «Работа» и «Семья»",
+      "status": "прошло",
+      "observed": [
+        "экран «Люди и группы», поля формы человека: Его ID | Пометка для себя — не обязательно",
+        "блоки: Добавить человека | Группы | Список людей; поле группы «Название группы», кнопка «Создать»",
+        "создание группы «Работа»: Группа создана",
+        "создание группы «Семья»: Группа создана",
+        "группы в списке: Работа, Семья",
+        "формы на месте, обе группы созданы"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-07-people-groups.png"
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Повторное создание группы «работа» — ожидается отказ",
+      "status": "прошло",
+      "observed": [
+        "сообщение: «Такая группа уже есть»",
+        "список групп до: [Работа, Семья], после: [Работа, Семья]",
+        "показано «Такая группа уже есть», вторая не создана"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-08-duplicate-group.png"
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Добавление человека: свой ID отклоняется, второй ID добавляется как «Коллега» в «Работа»",
+      "status": "прошло",
+      "observed": [
+        "попытка добавить свой ID (HCPYCG): «Это ваш ID»",
+        "вторая сессия получила ID G247U8",
+        "чипы групп в форме добавления: Работа, Семья",
+        "выбор группы перед добавлением: [{\"label\":\"Работа\",\"on\":true},{\"label\":\"Семья\",\"on\":false}]",
+        "после добавления: «Добавлено»; список людей: [{\"name\":\"Коллега\",\"sub\":\"ID G247U8\",\"chips\":[{\"label\":\"Работа\",\"on\":true},{\"label\":\"Семья\",\"on\":false}]}]",
+        "свой ID отклонён, второй добавлен как «Коллега» с активной группой «Работа»"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-09a-own-id-rejected.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-09b-contact-added.png"
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Переключение групп у контакта чипами",
+      "status": "прошло",
+      "observed": [
+        "до: [{\"label\":\"Работа\",\"on\":true},{\"label\":\"Семья\",\"on\":false}]",
+        "после первого нажатия «Семья»: [{\"label\":\"Работа\",\"on\":true},{\"label\":\"Семья\",\"on\":true}]",
+        "после второго нажатия: [{\"label\":\"Работа\",\"on\":true},{\"label\":\"Семья\",\"on\":false}]",
+        "чип «Семья» включается и выключается, «Работа» осталась включённой"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-10a-family-on.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-10b-contact-groups.png"
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Создание записи и отправка группе «Работа»",
+      "status": "прошло",
+      "observed": [
+        "возврат на главный экран: да",
+        "ответ в чате: «Записала | Совещание | завтра · 10:00 | Напомню · в момент | Изменить | Отменить | Будильник | Отправить»",
+        "карточка «Совещание» найдена на полке: tasks",
+        "экран «Отправить», блоки: Группы | Кому именно",
+        "чипы групп: [{\"label\":\"Работа · 1 чел.\",\"on\":false},{\"label\":\"Семья · пока никого\",\"on\":false}]",
+        "люди: [{\"text\":\"Коллега | ID G247U8 · Работа\",\"on\":false,\"check\":\"\"}]; кнопка «Отправить · 0»",
+        "после нажатия чипа «Работа»: человек отмечен = true (галочка «✓»), кнопка «Отправить · 1»",
+        "после отправки: «Отправлено · 1»",
+        "группы и люди показаны, выбор группы отметил человека, отправка прошла"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-11a-share-before.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-11b-share-group-selected.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-11c-after-send.png"
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Вторая сессия: плашка «Вам отправили 1» и происхождение записи",
+      "status": "не прошло",
+      "observed": [
+        "плашка на главной: «Вам отправили 1 — посмотреть»",
+        "карточка входящего: {\"title\":\"Совещание\",\"meta\":\"завтра · 10:00 · от\",\"pill\":\"входящее\",\"full\":\"Совещание | завтра · 10:00 · от | входящее | Принять | Отклонить\"}",
+        "данные об отправителе с сервера: [{\"title\":\"Совещание\",\"from\":{\"code\":\"HCPYCG\"}}]",
+        "плашка есть, но происхождение записи показано неверно: «завтра · 10:00 · от» (ожидался ID HCPYCG)"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-12a-second-session-home.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-12b-second-session-incoming.png"
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Ключ переноса: вход по ключу (нижний регистр) и отказ по неверному ключу",
+      "status": "не прошло",
+      "observed": [
+        "ввожу ключ в нижнем регистре: k4jm3-9g4qq-3jlwg-wmc22",
+        "после «Забрать свои записи»: экран «Четыре шага», ID «HCPYCG»",
+        "записи в перенесённой сессии: Совещание",
+        "неверный ключ: остались на экране входа = true, сообщение «»",
+        "неверный ключ: «», остались на входе = true"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-13a-restored-session.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-13b-restored-home.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/auth-13c-bad-key.png"
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Ошибки JS и сети за весь прогон",
+      "status": "прошло",
+      "observed": [
+        "ожидаемых отказов (шаги 8, 9, 13): 6",
+        "прочих сетевых ошибок: 0",
+        "исключений JS: 0, console.error/warning: 3, записей Log: 3",
+        "настоящих ошибок JS и сети нет"
+      ],
+      "defects": [],
+      "shots": [],
+      "expected": [
+        {
+          "session": "A",
+          "step": "шаг 8",
+          "kind": "cdp",
+          "status": 400,
+          "url": "http://127.0.0.1:8791/api/groups"
+        },
+        {
+          "session": "A",
+          "step": "шаг 8",
+          "kind": "http",
+          "status": 400,
+          "method": "POST",
+          "url": "http://127.0.0.1:8791/api/groups",
+          "body": "{\"error\":\"Такая группа уже есть\"}"
+        },
+        {
+          "session": "A",
+          "step": "шаг 9",
+          "kind": "cdp",
+          "status": 400,
+          "url": "http://127.0.0.1:8791/api/contacts"
+        },
+        {
+          "session": "A",
+          "step": "шаг 9",
+          "kind": "http",
+          "status": 400,
+          "method": "POST",
+          "url": "http://127.0.0.1:8791/api/contacts",
+          "body": "{\"error\":\"Это ваш ID\"}"
+        },
+        {
+          "session": "D",
+          "step": "шаг 13",
+          "kind": "cdp",
+          "status": 401,
+          "url": "http://127.0.0.1:8791/api/restore"
+        },
+        {
+          "session": "D",
+          "step": "шаг 13",
+          "kind": "http",
+          "status": 401,
+          "method": "POST",
+          "url": "http://127.0.0.1:8791/api/restore",
+          "body": "{\"error\":\"Ключ не подходит\"}"
+        }
+      ],
+      "realNet": []
+    },
+    {
+      "id": 15,
+      "title": "Визуальный контроль новых экранов",
+      "status": "прошло",
+      "observed": [
+        "наложений, обрезанного текста и вылетов за края не обнаружено"
+      ],
+      "defects": [],
+      "shots": []
+    }
+  ],
+  "jsErrors": [],
+  "consoleErrors": [
+    {
+      "session": "A",
+      "step": "шаг 8",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+      "location": {
+        "url": "http://127.0.0.1:8791/api/groups",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "session": "A",
+      "step": "шаг 9",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+      "location": {
+        "url": "http://127.0.0.1:8791/api/contacts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "session": "D",
+      "step": "шаг 13",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "location": {
+        "url": "http://127.0.0.1:8791/api/restore",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    }
+  ],
+  "netErrors": [
+    {
+      "session": "A",
+      "step": "шаг 8",
+      "kind": "cdp",
+      "status": 400,
+      "url": "http://127.0.0.1:8791/api/groups"
+    },
+    {
+      "session": "A",
+      "step": "шаг 8",
+      "kind": "http",
+      "status": 400,
+      "method": "POST",
+      "url": "http://127.0.0.1:8791/api/groups",
+      "body": "{\"error\":\"Такая группа уже есть\"}"
+    },
+    {
+      "session": "A",
+      "step": "шаг 9",
+      "kind": "cdp",
+      "status": 400,
+      "url": "http://127.0.0.1:8791/api/contacts"
+    },
+    {
+      "session": "A",
+      "step": "шаг 9",
+      "kind": "http",
+      "status": 400,
+      "method": "POST",
+      "url": "http://127.0.0.1:8791/api/contacts",
+      "body": "{\"error\":\"Это ваш ID\"}"
+    },
+    {
+      "session": "D",
+      "step": "шаг 13",
+      "kind": "cdp",
+      "status": 401,
+      "url": "http://127.0.0.1:8791/api/restore"
+    },
+    {
+      "session": "D",
+      "step": "шаг 13",
+      "kind": "http",
+      "status": 401,
+      "method": "POST",
+      "url": "http://127.0.0.1:8791/api/restore",
+      "body": "{\"error\":\"Ключ не подходит\"}"
+    }
+  ],
+  "logEntries": [
+    {
+      "session": "A",
+      "step": "шаг 8",
+      "level": "error",
+      "source": "network",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+      "url": "http://127.0.0.1:8791/api/groups"
+    },
+    {
+      "session": "A",
+      "step": "шаг 9",
+      "level": "error",
+      "source": "network",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+      "url": "http://127.0.0.1:8791/api/contacts"
+    },
+    {
+      "session": "D",
+      "step": "шаг 13",
+      "level": "error",
+      "source": "network",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "url": "http://127.0.0.1:8791/api/restore"
+    }
+  ]
+}

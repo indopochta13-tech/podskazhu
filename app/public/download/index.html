@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SoulVoice — скачать APK</title>
+<meta name="description" content="Скачайте SoulVoice для Android. Голос → задачи и напоминания." />
+<meta name="theme-color" content="#f7f5f2" />
+<link rel="icon" href="/icon-192.png" sizes="192x192" />
+<style>
+  :root { color-scheme: light; font-family: system-ui, -apple-system, sans-serif; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f7f5f2; color: #1e2823; }
+  main { max-width: 28rem; padding: 2rem 1.5rem; text-align: center; }
+  h1 { font-size: 1.75rem; margin: 0 0 .5rem; }
+  p { margin: 0 0 1.25rem; line-height: 1.5; color: #4a5a52; }
+  a.btn {
+    display: inline-block; padding: .9rem 1.4rem; border-radius: 999px;
+    background: #3d7a72; color: #fff; text-decoration: none; font-weight: 600;
+  }
+  a.btn:hover { background: #356b64; }
+  .meta { margin-top: 1rem; font-size: .875rem; color: #6b7a72; }
+  .alt { margin-top: 1.5rem; font-size: .8125rem; }
+  .alt a { color: #3d7a72; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SoulVoice</h1>
+  <p>Скажи — SoulVoice запомнит. Напомнит вовремя.</p>
+  <a class="btn" href="/download/soulvoice.apk" download="soulvoice.apk">Скачать APK для Android</a>
+  <div class="meta" id="ver">Версия загружается…</div>
+  <div class="alt"><a href="/app/">Открыть приложение в браузере</a></div>
+</main>
+<script>
+fetch("/app-version.json", { cache: "no-store" }).then(r => r.json()).then(v => {
+  document.getElementById("ver").textContent = "Версия " + (v.versionName || "") + " · ru.soulvoice.app";
+}).catch(() => { document.getElementById("ver").textContent = ""; });
+</script>
+</body>
+</html>

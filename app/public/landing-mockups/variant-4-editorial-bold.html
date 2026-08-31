@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Макет 04 · Editorial Bold</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+3:wght@300;400;600&display=swap');
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:"Source Sans 3",sans-serif; background:#0c1222; color:#f0ece4; }
+  .mock { background:#d4a853; color:#0c1222; text-align:center; padding:8px; font-size:12px; font-weight:700; }
+  .wrap { max-width:1000px; margin:0 auto; padding:0 28px 80px; }
+  header { padding:32px 0; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(212,168,83,.3); }
+  header em { font-family:"Playfair Display",serif; font-style:normal; color:#d4a853; }
+  .hero { display:grid; grid-template-columns:320px 1fr; gap:56px; padding:64px 0; align-items:end; }
+  @media(max-width:768px){ .hero{ grid-template-columns:1fr; } }
+  .photo { position:relative; }
+  .photo img { width:100%; height:400px; object-fit:cover; object-position:center 8%; display:block; }
+  .photo::after { content:""; position:absolute; bottom:0;left:0;right:0; height:4px; background:#d4a853; }
+  h1 { font-family:"Playfair Display",serif; font-size:clamp(2.8rem,6vw,4.5rem); font-weight:700; line-height:1.05; margin-bottom:20px; }
+  .gold { color:#d4a853; }
+  .tagline { font-size:1.2rem; font-weight:300; color:rgba(240,236,228,.7); margin-bottom:32px; max-width:480px; }
+  .contact-line { font-size:1rem; letter-spacing:.05em; }
+  .contact-line a { color:#d4a853; text-decoration:none; border-bottom:1px solid #d4a853; }
+  section { padding:48px 0; border-top:1px solid rgba(255,255,255,.08); }
+  h2 { font-family:"Playfair Display",serif; font-size:1.8rem; margin-bottom:28px; }
+  h2 span { color:#d4a853; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:40px; }
+  @media(max-width:640px){ .cols{ grid-template-columns:1fr; } }
+  ul { list-style:none; }
+  ul li { padding:12px 0; border-bottom:1px solid rgba(255,255,255,.06); font-size:1.05rem; display:flex; justify-content:space-between; }
+  ul li a { color:#d4a853; font-size:.85rem; text-decoration:none; opacity:.8; }
+  .time-item { display:flex; justify-content:space-between; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.06); }
+  .time-item b { color:#d4a853; font-weight:600; }
+  footer { padding-top:40px; font-size:.85rem; color:rgba(240,236,228,.4); display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+</style>
+</head>
+<body>
+<div class="mock">МАКЕТ 04 · Editorial Bold</div>
+<div class="wrap">
+  <header><div><em>V</em>olkov Valerii</div><div style="font-size:.9rem;opacity:.6;">Software Engineer</div></header>
+  <section class="hero" style="border:none;">
+    <div class="photo"><img src="photo.jpg" alt="Volkov Valerii"></div>
+    <div>
+      <h1>Разработка <span class="gold">приложений,</span> сайтов и ботов</h1>
+      <p class="tagline">Independent IT contractor. Полный цикл: от идеи до деплоя. Мобильные приложения, веб, Telegram, автоматизация. Самозанятый, Россия.</p>
+      <p class="contact-line"><a href="mailto:indopochte13@gmail.com">indopochte13@gmail.com</a></p>
+    </div>
+  </section>
+  <section>
+    <h2>Что <span>делаю</span></h2>
+    <div class="cols">
+      <ul>
+        <li>Мобильные приложения <span>→</span></li>
+        <li>Сайты и веб-приложения <span>→</span></li>
+        <li>Telegram- и VK-боты <span>→</span></li>
+      </ul>
+      <ul>
+        <li>Любая автоматизация <span>→</span></li>
+        <li>Backend и API <span>→</span></li>
+        <li>DevOps и деплой <span>→</span></li>
+      </ul>
+    </div>
+  </section>
+  <section>
+    <h2>Примеры <span>работ</span></h2>
+    <ul>
+      <li>Психея — Telegram Mini App <a>psycheecosystem.com</a></li>
+      <li>SoulVoice — голос → задачи <a>Android APK</a></li>
+      <li>Market Pulse <a>pulse dashboard</a></li>
+      <li>VPN Bot Pulse209 <a>@Pulse209VPN_bot</a></li>
+    </ul>
+  </section>
+  <section>
+    <h2>Примерные <span>сроки</span></h2>
+    <div class="time-item"><span>Лендинг / сайт</span><b>3–7 дней</b></div>
+    <div class="time-item"><span>Telegram-бот</span><b>1–2 недели</b></div>
+    <div class="time-item"><span>Mini App / веб-приложение</span><b>2–4 недели</b></div>
+    <div class="time-item"><span>Мобильное приложение</span><b>3–6 недель</b></div>
+    <div class="time-item"><span>Автоматизация</span><b>2–7 дней</b></div>
+  </section>
+  <footer>
+    <span>github.com/indopochta13-tech</span>
+    <span>Политика конфиденциальности · Согласие на обработку данных</span>
+  </footer>
+</div>
+</body>
+</html>

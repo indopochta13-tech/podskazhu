@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Макет 03 · Gradient SaaS</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Inter,-apple-system,sans-serif; background:#0f0a1a; color:#fff; overflow-x:hidden; }
+  .mock { background:linear-gradient(90deg,#6366f1,#ec4899); text-align:center; padding:8px; font-size:12px; font-weight:700; }
+  .blob1,.blob2 { position:fixed; border-radius:50%; filter:blur(80px); opacity:.5; pointer-events:none; }
+  .blob1 { width:400px;height:400px;background:#6366f1;top:-100px;right:-100px; }
+  .blob2 { width:350px;height:350px;background:#ec4899;bottom:-80px;left:-80px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:40px 24px 80px; position:relative; z-index:1; }
+  .glass { background:rgba(255,255,255,.08); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,.12); border-radius:24px; }
+  nav { display:flex; justify-content:space-between; align-items:center; padding:16px 24px; margin-bottom:40px; }
+  .hero { display:grid; grid-template-columns:1fr 260px; gap:32px; padding:48px; margin-bottom:32px; align-items:center; }
+  @media(max-width:768px){ .hero{ grid-template-columns:1fr; padding:28px; } }
+  h1 { font-size:2.6rem; font-weight:800; line-height:1.15; margin-bottom:16px; background:linear-gradient(135deg,#fff,#c4b5fd); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .lead { color:rgba(255,255,255,.7); margin-bottom:24px; font-size:1.05rem; }
+  .cta { display:inline-block; padding:14px 32px; background:linear-gradient(135deg,#6366f1,#8b5cf6); border-radius:999px; color:#fff; text-decoration:none; font-weight:600; box-shadow:0 8px 32px rgba(99,102,241,.4); }
+  .photo { width:260px; height:300px; border-radius:20px; overflow:hidden; border:3px solid rgba(255,255,255,.2); }
+  .photo img { width:100%; height:115%; object-fit:cover; object-position:center 8%; margin-top:-5%; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px; }
+  @media(max-width:768px){ .grid3{ grid-template-columns:1fr; } }
+  .card { padding:24px; }
+  .card h3 { font-size:1rem; margin-bottom:8px; }
+  .card p { font-size:.85rem; color:rgba(255,255,255,.6); }
+  .card .icon { font-size:1.8rem; margin-bottom:12px; }
+  .works { padding:32px; margin-bottom:32px; }
+  .works h2 { margin-bottom:20px; font-size:1.2rem; }
+  .wrow { display:flex; justify-content:space-between; padding:14px 0; border-bottom:1px solid rgba(255,255,255,.08); font-size:.95rem; }
+  .wrow a { color:#a5b4fc; text-decoration:none; font-size:.85rem; }
+  .times { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
+  .tbox { padding:20px; text-align:center; }
+  .tbox b { display:block; font-size:1.4rem; margin-bottom:4px; color:#c4b5fd; }
+  .tbox span { font-size:.8rem; color:rgba(255,255,255,.5); }
+  footer { text-align:center; padding:24px; font-size:.85rem; color:rgba(255,255,255,.4); }
+</style>
+</head>
+<body>
+<div class="mock">МАКЕТ 03 · Gradient SaaS</div>
+<div class="blob1"></div><div class="blob2"></div>
+<div class="wrap">
+  <nav class="glass"><strong>Valerii.dev</strong><a href="mailto:indopochte13@gmail.com" style="color:#a5b4fc;text-decoration:none;">indopochte13@gmail.com</a></nav>
+  <section class="hero glass">
+    <div>
+      <h1>Приложения, сайты, боты — под ключ</h1>
+      <p class="lead">Volkov Valerii · full-stack разработчик. Мобильные приложения, веб, Telegram, автоматизация любой сложности.</p>
+      <a class="cta" href="mailto:indopochte13@gmail.com">Написать на почту →</a>
+    </div>
+    <div class="photo"><img src="photo.jpg" alt="Volkov Valerii"></div>
+  </section>
+  <div class="grid3">
+    <div class="glass card"><div class="icon">📱</div><h3>Мобильные apps</h3><p>Android, Capacitor, RuStore</p></div>
+    <div class="glass card"><div class="icon">🌐</div><h3>Сайты</h3><p>Лендинги, PWA, админки</p></div>
+    <div class="glass card"><div class="icon">🤖</div><h3>Боты + автоматизация</h3><p>Telegram, CRM, скрипты</p></div>
+  </div>
+  <section class="glass works">
+    <h2>Примеры работ</h2>
+    <div class="wrow"><span>Психея — Telegram Mini App</span><a>psycheecosystem.com</a></div>
+    <div class="wrow"><span>SoulVoice — голос → задачи</span><a>Android APK</a></div>
+    <div class="wrow"><span>Market Pulse</span><a>pulse dashboard</a></div>
+    <div class="wrow"><span>VPN Bot Pulse209</span><a>@Pulse209VPN_bot</a></div>
+  </section>
+  <div class="times">
+    <div class="glass tbox"><b>3–7</b><span>дней · лендинг</span></div>
+    <div class="glass tbox"><b>1–2</b><span>нед · бот</span></div>
+    <div class="glass tbox"><b>2–4</b><span>нед · Mini App</span></div>
+    <div class="glass tbox"><b>3–6</b><span>нед · mobile</span></div>
+  </div>
+  <footer>indopochte13@gmail.com · Политика · Согласие · github.com/indopochta13-tech</footer>
+</div>
+</body>
+</html>

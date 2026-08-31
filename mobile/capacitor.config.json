@@ -1,0 +1,25 @@
+{
+  "appId": "ru.soulvoice.app",
+  "appName": "SoulVoice",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#f3f7f6"
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 500,
+      "launchAutoHide": true,
+      "backgroundColor": "#f3f7f6",
+      "showSpinner": false,
+      "androidSpinnerStyle": "small"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#3d7a72"
+    }
+  }
+}

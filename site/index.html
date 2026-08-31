@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SoulVoice — голосовой помощник для напоминаний</title>
+<meta name="description" content="Скажите обычную фразу — приложение поймёт дату, время и напомнит. Курсы витаминов, уход за собой, платежи, счётчики, общие списки.">
+<meta name="theme-color" content="#f7f5f2">
+<style>
+  :root{color-scheme:light;--bg:#f7f5f2;--surface:#fffefc;--ink:#2a2622;--soft:#756c62;--accent:#5c5248;--line:#e6e0d8;--tint:#efeae2}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;letter-spacing:-.01em}
+  .wrap{max-width:700px;margin:0 auto;padding:0 24px}
+  .wide{max-width:1180px;margin:0 auto;padding:0 24px}
+  a{color:var(--accent)}
+  .top{display:flex;align-items:center;justify-content:space-between;padding:20px 0}
+  .mark{font-size:18px;font-weight:600}
+  .top-link{font-size:15px;color:var(--soft);text-decoration:none}
+  .hero{padding:58px 0 46px;text-align:center}
+  .hero h1{font-size:clamp(34px,7vw,52px);line-height:1.15;margin:0 0 20px}
+  .hero p{font-size:19px;line-height:1.55;color:var(--soft);max-width:30em;margin:0 auto}
+  .cta{margin:34px 0 0}
+  .btn{display:inline-block;background:var(--accent);color:var(--surface);text-decoration:none;font-size:17px;font-weight:600;padding:16px 34px;border-radius:999px;transition:transform .12s ease}
+  .btn:active{transform:scale(.97)}
+  .btn:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+  .cta-note{color:var(--soft);font-size:15px;margin:13px 0 0}
+  .gallery{padding:8px 0 64px}
+  .rail{display:flex;gap:26px;overflow-x:auto;scroll-snap-type:x mandatory;padding:8px 24px 26px;margin:0 -24px}
+  .rail::-webkit-scrollbar{height:6px}
+  .rail::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .shot{flex:0 0 auto;width:260px;scroll-snap-align:center}
+  .shot img{display:block;width:100%;height:auto;border-radius:22px;border:1px solid var(--line);background:var(--surface)}
+  .shot-cap{margin:14px 2px 0;font-size:15px;line-height:1.45}
+  .shot-cap b{display:block;font-weight:600;margin-bottom:2px}
+  .shot-cap span{color:var(--soft)}
+  .swipe-hint{text-align:center;color:var(--soft);font-size:14px;margin:0}
+  section{padding:60px 0;border-top:1px solid var(--line)}
+  h2{font-size:27px;margin:0 0 10px}
+  .sub{color:var(--soft);margin:0 0 30px;max-width:44em}
+  .rows{margin:0;padding:0;list-style:none}
+  .rows li{display:grid;grid-template-columns:1fr auto;gap:4px 18px;padding:16px 0;border-bottom:1px solid var(--line)}
+  .rows li:last-child{border-bottom:0}
+  .rows b{font-weight:600}
+  .rows p{grid-column:1;margin:0;color:var(--soft);font-size:15.5px}
+  .tag{grid-row:1/span 2;grid-column:2;align-self:center;font-size:13px;padding:3px 11px;border-radius:999px;white-space:nowrap}
+  .tag.free{background:var(--tint);color:var(--soft)}
+  .tag.pro{background:var(--accent);color:var(--surface)}
+  .dots{display:flex;gap:14px;flex-wrap:wrap}
+  .dot{text-align:center;font-size:13px;color:var(--soft)}
+  .dot i{display:block;width:42px;height:42px;border-radius:50%;margin:0 auto 7px}
+  .prices{display:flex;gap:16px;flex-wrap:wrap}
+  .price{flex:1 1 200px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+  .price.year{border-color:var(--accent)}
+  .price-num{font-size:30px;font-weight:600;letter-spacing:-.02em}
+  .price-per{color:var(--soft);font-size:15px;margin-top:3px}
+  footer{border-top:1px solid var(--line);padding:36px 0 76px;color:var(--soft);font-size:15px}
+  footer p{margin:0 0 8px}
+  @media (max-width:640px){.shot{width:224px}section{padding:48px 0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top"><div class="mark">SoulVoice</div><a class="top-link" href="#get">Установить</a></header>
+  <div class="hero">
+    <h1>Скажите вслух — приложение запомнит</h1>
+    <p>Голосовой помощник, который понимает обычную речь: разбирает дату и время, раскладывает записи по разделам и напоминает вовремя. Курсы витаминов, уход за собой, платежи за детей, показания счётчиков, общие списки с близкими.</p>
+    <div class="cta" id="get">
+      <a class="btn" href="/download/soulvoice.apk">Скачать для Android</a>
+      <p class="cta-note">Бесплатно · Android 8 и новее · скоро в RuStore</p>
+    </div>
+  </div>
+</div>
+
+<div class="gallery"><div class="wide">
+  <div class="rail">
+    <figure class="shot"><img src="shots/vitamins.jpg" alt="Курсы витаминов" loading="lazy"><figcaption class="shot-cap"><b>Курсы витаминов</b><span>Приём по дням, дозировки, пометки от врача. Дни курса считаются сами.</span></figcaption></figure>
+    <figure class="shot"><img src="shots/care.jpg" alt="Уход за собой" loading="lazy"><figcaption class="shot-cap"><b>Уход за собой</b><span>Утренний и вечерний порядок. Что за чем и когда напомнить.</span></figcaption></figure>
+    <figure class="shot"><img src="shots/sport.jpg" alt="Тренировки" loading="lazy"><figcaption class="shot-cap"><b>Тренировки</b><span>Расписание на неделю. Напомнит в момент, а не за час до.</span></figcaption></figure>
+    <figure class="shot"><img src="shots/bills.jpg" alt="Платежи" loading="lazy"><figcaption class="shot-cap"><b>Платежи</b><span>Кружки, секции, питание — за кого и когда. Каждый месяц заранее.</span></figcaption></figure>
+    <figure class="shot"><img src="shots/meters.jpg" alt="Счётчики и ЖКХ" loading="lazy"><figcaption class="shot-cap"><b>Счётчики и ЖКХ</b><span>Вода, свет, газ. Напомнит до конца срока, а не когда поздно.</span></figcaption></figure>
+    <figure class="shot"><img src="shots/shared.jpg" alt="Общие списки" loading="lazy"><figcaption class="shot-cap"><b>Общие списки</b><span>Дела с близкими. Видно, кто что добавил и что уже сделано.</span></figcaption></figure>
+    <figure class="shot"><img src="shots/settings.jpg" alt="Настройки" loading="lazy"><figcaption class="shot-cap"><b>Под себя</b><span>Шесть палитр, светлая и тёмная тема, виджет на экране.</span></figcaption></figure>
+  </div>
+  <p class="swipe-hint">Листайте вбок, чтобы посмотреть все экраны</p>
+</div></div>
+
+<div class="wrap">
+  <section>
+    <h2>Как это работает</h2>
+    <p class="sub">Держите кнопку и говорите. Приложение распознаёт речь, само понимает, о чём запись, и кладёт её на нужную полку.</p>
+    <ul class="rows">
+      <li><b>Понимает обычную речь</b><p>«Встреча в четверг в три», «витамин Д каждое утро», «оплатить кружок пятого числа» — без выбора из списков.</p></li>
+      <li><b>Раскладывает само</b><p>Покупки, встречи, дела, платежи, витамины — каждая запись попадает туда, где вы её найдёте.</p></li>
+      <li><b>Переспросит, если не хватает</b><p>Сказали «встреча завтра» без времени — уточнит во сколько. Одним словом, не диалогом на пять шагов.</p></li>
+      <li><b>Напомнит без интернета</b><p>Напоминания ставит сам телефон. Связь нужна только чтобы записать.</p></li>
+      <li><b>Виджет на экране</b><p>Дела на сегодня и кнопка записи — не открывая приложение.</p></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Что бесплатно, что по подписке</h2>
+    <p class="sub">Всё, что нужно записать и не забыть, — бесплатно навсегда. Подписка там, где приложение не просто помнит, а ведёт: считает дни курса, хранит историю, следит за расписанием.</p>
+    <ul class="rows">
+      <li><b>Заметки и дела</b><p>всё, что просто записать</p><em class="tag free">бесплатно</em></li>
+      <li><b>Покупки</b><p>список с собой в магазин</p><em class="tag free">бесплатно</em></li>
+      <li><b>Встречи</b><p>напомнит заранее</p><em class="tag free">бесплатно</em></li>
+      <li><b>Будильники</b><p>разбудят даже без связи</p><em class="tag free">бесплатно</em></li>
+      <li><b>Дни рождения</b><p>раз в год, не забудете</p><em class="tag free">бесплатно</em></li>
+      <li><b>Виджет и голос</b><p>без ограничений</p><em class="tag free">бесплатно</em></li>
+      <li><b>Витамины и лекарства</b><p>курсы, дни приёма, дозировки, история</p><em class="tag pro">подписка</em></li>
+      <li><b>Уход за собой</b><p>утренний и вечерний порядок средств</p><em class="tag pro">подписка</em></li>
+      <li><b>Тренировки</b><p>расписание на неделю</p><em class="tag pro">подписка</em></li>
+      <li><b>Платежи и счётчики</b><p>ежемесячные, с запасом по сроку</p><em class="tag pro">подписка</em></li>
+      <li><b>Общие списки</b><p>дела вместе с близкими</p><em class="tag pro">подписка</em></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Шесть палитр</h2>
+    <p class="sub">Приложение подстраивается под вас. Светлая и тёмная тема или как в системе.</p>
+    <div class="dots">
+      <div class="dot"><i style="background:#5c5248"></i>камень</div>
+      <div class="dot"><i style="background:#2b2723"></i>графит</div>
+      <div class="dot"><i style="background:#4a5560"></i>дым</div>
+      <div class="dot"><i style="background:#7a6a52"></i>кость</div>
+      <div class="dot"><i style="background:#2e7d6f"></i>teal</div>
+      <div class="dot"><i style="background:#7b4f8f"></i>слива</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Сколько стоит</h2>
+    <div class="prices">
+      <div class="price"><div class="price-num">299 ₽</div><div class="price-per">в месяц</div></div>
+      <div class="price year"><div class="price-num">1 990 ₽</div><div class="price-per">в год — выгоднее почти вдвое</div></div>
+    </div>
+    <p class="sub" style="margin:22px 0 0">Есть семейная подписка: вы оплачиваете доступ близким по их номеру в приложении. Каждый следующий человек дешевле предыдущего — скидка начинается с 10 % и доходит до половины цены.</p>
+  </section>
+
+  <section>
+    <h2>Что мы храним</h2>
+    <p class="sub" style="margin-bottom:16px">Аккаунт заводится сам: имя, телефон и почту приложение не спрашивает. На сервере лежат только ваши записи и время напоминаний.</p>
+    <p class="sub" style="margin-bottom:16px">Названия лекарств и средств для ухода остаются на вашем телефоне и к нам не попадают — это сведения о здоровье, и держать их у себя мы не хотим. На сервере только расписание приёмов.</p>
+    <p class="sub" style="margin-bottom:0">Рекламы и сторонней аналитики нет. Подробнее — в <a href="privacy.html">политике конфиденциальности</a>.</p>
+  </section>
+</div>
+
+<footer><div class="wrap">
+  <div style="margin-bottom:26px"><a class="btn" href="/download/soulvoice.apk">Скачать для Android</a></div>
+  <p>Волков Валерий Николаевич, самозанятый · ИНН 771576725515</p>
+  <p><a href="mailto:indopochta13@gmail.com">indopochta13@gmail.com</a></p>
+  <p><a href="offer.html">Публичная оферта</a> · <a href="privacy.html">Политика конфиденциальности</a></p>
+  <p style="margin-top:20px"><a href="/app/">Открыть в браузере, без установки</a></p>
+</div></footer>
+</body>
+</html>

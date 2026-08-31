@@ -1,0 +1,37 @@
+{
+  "contract_version": "v1.1",
+  "contract_date": "30 августа 2026",
+  "contract_date_en": "August 30, 2026",
+  "city": "Москва",
+  "city_en": "Moscow, Russia",
+  "partner_app_name": "Приложение «Психея» (Eco Psyche, Telegram mini-app)",
+  "developer_app_name": "SoulVoice",
+  "developer_app_description": "мобильное приложение «SoulVoice» (голос → задачи и напоминания; Android, PWA)",
+  "developer_app_url": "https://soulvoicee.ru",
+  "developer_app_download": "https://soulvoicee.ru/download/",
+  "developer_app_privacy": "https://soulvoicee.ru/privacy.html",
+  "system_name": "Психея · SOFT-SKILLS AI",
+  "party_partner": {
+    "party_key": "party_1",
+    "role_label": "Партнер",
+    "fio": "Волкова Мария Сергеевна",
+    "inn": "760906972203",
+    "status_npd": "Самозанятый",
+    "email": "kiprglik@gmail.com",
+    "phone": "",
+    "address": "",
+    "account_id_placeholder": ""
+  },
+  "party_developer": {
+    "party_key": "party_2",
+    "role_label": "Разработчик",
+    "fio": "Волков Валерий Николаевич",
+    "inn": "771576725515",
+    "status_npd": "Самозанятый",
+    "email": "indopochta13@gmail.com",
+    "phone": "",
+    "address": "",
+    "account_id_placeholder": ""
+  },
+  "_comment": "telegram_ids подставляются из OWNER_IDS / MARIA_IDS на сервере, если пусто"
+}

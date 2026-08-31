@@ -1,0 +1,31 @@
+{
+  "name": "soulvoice-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Android-обёртка приложения SoulVoice для RuStore",
+  "scripts": {
+    "www": "node build-www.mjs",
+    "lint:web": "npm run --prefix ../app lint",
+    "postinstall": "node scripts/patch-speech-recognition.mjs",
+    "sync": "npm run lint:web && npm run www && node scripts/patch-speech-recognition.mjs && cap sync android",
+    "apk:debug": "npm run sync && cd android && ./gradlew assembleDebug",
+    "apk:release": "npm run sync && cd android && ./gradlew assembleRelease",
+    "aab:release": "npm run sync && cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor-community/speech-recognition": "^7.0.1",
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/local-notifications": "^8.2.1",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "esbuild": "^0.25.0"
+  }
+}

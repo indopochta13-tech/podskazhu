@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>SoulVoice</title>
+<meta name="theme-color" content="#f7f5f2" />
+<meta name="description" content="Скажи — SoulVoice запомнит. Напомнит вовремя." />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="SoulVoice" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icon-192.png" sizes="192x192" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="stylesheet" href="/styles.css?v=103" />
+<script>
+(function () {
+  try {
+    var palettes = ["stone", "graphite", "smoke", "ivory", "teal", "plum"];
+    var modes = ["light", "dark", "system"];
+    var p = localStorage.getItem("vc.palette");
+    var m = localStorage.getItem("vc.themeMode");
+    if (palettes.indexOf(p) < 0) p = "stone";
+    if (modes.indexOf(m) < 0) m = "system";
+    var dark = m === "dark" || (m === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    document.documentElement.dataset.palette = p;
+  } catch (e) {
+    document.documentElement.dataset.theme = "light";
+    document.documentElement.dataset.palette = "stone";
+  }
+})();
+</script>
+<script>
+(function () {
+  // До app.js: обновить SW и подтянуть свежий app.js. Старый кэш без silentStart
+  // показывал «Скажите, что напомнить» и не давал SW обновиться без входа.
+  // SWV и app.js?v= ниже — одно число; при смене поднимайте и SW_VERSION в sw.js / app.js.
+  window.__VC_SHELL_V = 129;
+  if (!("serviceWorker" in navigator)) return;
+  var SWV = String(window.__VC_SHELL_V);
+  var reloadKey = "vc.sw-reload-" + SWV;
+  navigator.serviceWorker.register("/sw.js?v=" + SWV).then(function (reg) {
+    reg.update();
+  }).catch(function () {});
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (sessionStorage.getItem(reloadKey)) return;
+    sessionStorage.setItem(reloadKey, "1");
+    location.reload();
+  });
+  navigator.serviceWorker.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "sw-activated" && String(event.data.version) !== SWV) {
+      location.reload();
+    }
+  });
+})();
+</script>
+</head>
+<body>
+<div id="app" class="app">
+  <div class="boot">Загружаю…</div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<template id="tpl-auth">
+  <section class="screen auth">
+    <div class="auth-inner auth-first">
+      <h1 class="auth-invite">Скажите, что вам напомнить</h1>
+      <p class="auth-mic-hint" id="auth-mic-hint">Микрофон нужен, чтобы услышать фразу. Распознавание делает сам телефон — как в поиске Google.</p>
+      <button class="auth-mic-btn" id="auth-mic" type="button" aria-label="Сказать фразу">
+        <span class="auth-mic-dot" aria-hidden="true"></span>
+      </button>
+      <p class="auth-example">Например: «завтра в 10 к врачу на Таганке»</p>
+      <button class="auth-text-btn" id="auth-text-toggle" type="button">Ввести текстом</button>
+      <div class="auth-text-form hidden" id="auth-text-form">
+        <label class="field">
+          <textarea id="auth-text-input" rows="3" placeholder="завтра в 10 к врачу на Таганке"></textarea>
+        </label>
+        <button class="btn block" id="auth-text-go" type="button">Разобрать</button>
+      </div>
+
+      <div class="auth-form hidden" data-auth-form="restore">
+        <label class="field">
+          <span>Ключ переноса</span>
+          <input name="key" type="text" autocapitalize="characters" autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" />
+        </label>
+        <label class="consent" for="auth-restore-consent">
+          <input type="checkbox" id="auth-restore-consent" />
+          <span>Согласен на обработку записей и принимаю
+            <a href="/privacy.html" data-doc="/privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.</span>
+        </label>
+        <button class="btn block" id="auth-restore" type="button">Забрать свои записи</button>
+      </div>
+
+      <button class="auth-switch" id="auth-toggle" type="button">У меня есть ключ переноса</button>
+      <p class="auth-error" data-auth-error></p>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-shell">
+  <div class="shell">
+    <main class="stage" id="stage"></main>
+  </div>
+</template>
+<script src="/app.js?v=129" type="module"></script>
+</body>
+</html>

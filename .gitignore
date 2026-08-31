@@ -1,0 +1,9 @@
+node_modules/
+mobile/android/build/
+mobile/android/.gradle/
+app/data/
+*.keystore
+android/keystore.properties
+mobile/android/keystore.properties
+.env
+app/public/download/*.apk

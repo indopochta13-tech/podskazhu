@@ -1,0 +1,12 @@
+---
+description: SoulVoice — отдельный проект, не монорепо psyche_circles
+alwaysApply: true
+---
+
+# Отдельный репозиторий
+
+SoulVoice (VoiceCapture) живёт в **своём** корне `~/Downloads/voicecapture`, не в `psyche_circles`.
+
+- Не добавлять в git файлы из `psyche_circles` и не ссылаться на старые пути монорепо как на рабочий корень.
+- Продакшен не трогаем без явной просьбы владельца (деплой, SSH на серверы — только по запросу).
+- Psyche (api, core, frontend) — другой проект в `~/Downloads/psyche_circles`.

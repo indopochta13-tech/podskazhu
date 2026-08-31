@@ -1,0 +1,248 @@
+{
+  "base": "http://127.0.0.1:8791",
+  "code": "RHRYPL",
+  "results": [
+    {
+      "id": 1,
+      "title": "Открыть / и при необходимости выйти на экран входа",
+      "status": "прошло",
+      "observed": [
+        "после загрузки экран: AUTH",
+        "экран входа отрисован, вкладки «Новый вход» / «У меня есть код» на месте"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/01-auth.png"
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Регистрация: Имя=Проба, PIN=5566, «Начать»",
+      "status": "прошло",
+      "observed": [
+        "подпись кнопки: «Начать»",
+        "регистрация прошла, приложение ушло с экрана входа (экран «Три шага»)"
+      ],
+      "defects": [],
+      "shots": []
+    },
+    {
+      "id": 3,
+      "title": "Сразу после регистрации — экран «Три шага» (код+копировать, экран Домой, уведомления)",
+      "status": "прошло",
+      "observed": [
+        "заголовок экрана: «Три шага»",
+        "пункты: 1) Сохраните код; 2) Поставьте на экран «Домой»; 3) Разрешите уведомления",
+        "код: RHRYPL; кнопка копирования: «Скопировать код»; кнопка 3-го шага: «Разрешить уведомления»; нижняя кнопка: «Всё, начинаем»",
+        "все три пункта на месте, код показан, кнопка «Скопировать код» есть",
+        "«Скопировать код» → тост: «Код скопирован»"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/02-tri-shaga-after-register.png"
+      ]
+    },
+    {
+      "id": 4,
+      "title": "«Всё, начинаем» → домашний экран с виджетом из трёх кнопок",
+      "status": "прошло",
+      "observed": [
+        "виджет: [{\"label\":\"Чат\",\"go\":\"chat\"},{\"label\":\"Запись\",\"go\":\"record\"},{\"label\":\"Дела\",\"go\":\"shelves\"}]",
+        "домашний экран, три кнопки: Чат / Запись / Дела"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/03-home-widget.png"
+      ]
+    },
+    {
+      "id": "5а",
+      "title": "Чат: «каждый день в 8 утра витамины» → карточка «Записала» + «каждый день» + «Напомню»",
+      "status": "прошло",
+      "observed": [
+        "экран: «Чат»",
+        "ответ: Записала | Витамины | сегодня · 08:00 · каждый день | Напомню · в момент | Изменить | Отменить | Будильник | Отправить",
+        "заголовок=«Записала» строки=[\"Витамины\",\"сегодня · 08:00 · каждый день\"] колокольчик=«Напомню · в момент»",
+        "чипы: Изменить / Отменить / Будильник / Отправить",
+        "карточка «Записала», в строке «каждый день», строка «Напомню» присутствует"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/04-chat-5a-vitamins.png"
+      ]
+    },
+    {
+      "id": "5б",
+      "title": "Повтор той же фразы → «Уже стоит», новая запись не создаётся",
+      "status": "прошло",
+      "observed": [
+        "ответ: Уже стоит | Витамины | сегодня · 08:00 · каждый день | Напомню · в момент | Изменить | Отменить | Будильник | Отправить",
+        "заголовок=«Уже стоит»",
+        "записей «Витамины» в состоянии сервера: 1",
+        "получено «Уже стоит», дубликат не создан (ровно 1 запись)"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/05-chat-5b-duplicate.png"
+      ]
+    },
+    {
+      "id": "5в",
+      "title": "«в субботу забрать посылку» → без времени + 3 чипа + «Другое время»",
+      "status": "прошло",
+      "observed": [
+        "ответ: Записала | Забрать посылку | 8 авг · без времени | Времени нет — поставьте одним тапом | утром 9:00 | в обед 13:00 | вечером 19:00 | Другое время",
+        "заголовок=«Записала» строки=[\"Забрать посылку\",\"8 авг · без времени\"] колокольчик=«Времени нет — поставьте одним тапом»",
+        "чипы: утром 9:00 / в обед 13:00 / вечером 19:00 / Другое время",
+        "карточка без времени, три чипа быстрого времени и «Другое время» на месте"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/06-chat-5v-parcel-chips.png"
+      ]
+    },
+    {
+      "id": "5г",
+      "title": "Чип «в обед 13:00» → карточка «Время поставила» с 13:00",
+      "status": "прошло",
+      "observed": [
+        "ответ: Время поставила | Забрать посылку | 8 авг · 13:00 | Напомню · в момент",
+        "карточка «Время поставила», время 13:00"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/07-chat-5g-time-set.png"
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Полки → «Дела»: квадратная кнопка-галочка, отметка «Готово» и возврат в работу",
+      "status": "прошло",
+      "observed": [
+        "экран: «Полки»",
+        "карточки на «Дела»: [{\"title\":\"Витамины\",\"meta\":\"сегодня · 08:00 · каждый день | пуш · в момент\",\"pill\":\"дело\",\"tickTag\":\"BUTTON\",\"tickBox\":{\"w\":48,\"h\":89},\"tickSeparate\":true,\"innerSquare\":{\"w\":22,\"h\":22,\"radius\":\"7px\"}},{\"title\":\"Забрать посылку\",\"meta\":\"8 авг · 13:00 | пуш · в момент\",\"pill\":\"дело\",\"tickTag\":\"BUTTON\",\"tickBox\":{\"w\":48,\"h\":89},\"tickSeparate\":true,\"innerSquare\":{\"w\":22,\"h\":22,\"radius\":\"7px\"}}]",
+        "галочка — отдельная кнопка 48×89px, внутри квадрат 22×22 (radius 7px)",
+        "после 1-го тапа: тост=«Готово», экран=«Полки», класс done=true, text-decoration=line-through, галочка активна=true",
+        "после 2-го тапа: тост=«Вернула в работу», класс done=false, text-decoration=none",
+        "галочка отдельная, тост «Готово», название зачёркнуто, повторный тап вернул в работу"
+      ],
+      "defects": [
+        "вылет за правый край: <button.tab.> right=464 > 400"
+      ],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/08-shelf-tasks-done.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/09-shelf-tasks-undone.png"
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Карточка «Витамины» тапом по тексту: 4 блока Когда/Время/Пуш/Повтор + «Место» + «Тип»",
+      "status": "прошло",
+      "observed": [
+        "экран: «Карточка»",
+        "блоки: Когда=«3 авг»; Время=«08:00»; Пуш=«в момент»; Повтор=«каждый день»",
+        "поле «Место»: {\"label\":\"Место\",\"placeholder\":\"не обязательно\",\"value\":\"\"}",
+        "переключатель «Тип»: Встреча / Дело* / Заметка / Др",
+        "четыре блока Когда/Время/Пуш/Повтор, поле «Место», переключатель Встреча/Дело/Заметка/Др"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/10-detail-vitamins-4blocks.png"
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Блок «Повтор»: колесо со 6 значениями, прокрутка через CDP Runtime.evaluate меняет заголовок",
+      "status": "прошло",
+      "observed": [
+        "заголовок «Повтор» до прокрутки: «каждый день»",
+        "колесо: {\"values\":[\"без повтора\",\"каждый день\",\"по будням\",\"по выходным\",\"каждую неделю\",\"каждый месяц\"],\"index\":\"1\",\"scrollTop\":40,\"scrollHeight\":380,\"clientHeight\":180,\"overflowY\":\"auto\",\"open\":true}",
+        "CDP Runtime.evaluate → \"scrollTop=80\"",
+        "после прокрутки: заголовок=«по будням», data-index=2, подсвечено=«по будням»",
+        "шесть значений в колесе, прокрутка на 2 позиции сменила заголовок на «по будням»"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/11-detail-repeat-wheel.png"
+      ]
+    },
+    {
+      "id": 9,
+      "title": "«Сохранить» → возврат на Полки + уведомление «Сохранено»",
+      "status": "прошло",
+      "observed": [
+        "тост: «Сохранено», экран после сохранения: «Полки»",
+        "мета «Витамины» на полке: сегодня · 08:00 · по будням | пуш · в момент",
+        "вернулись на «Полки», показан тост «Сохранено»"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/12-saved-back-to-shelves.png"
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Тип «Заметка» → запись переезжает на полку «Заметки»",
+      "status": "прошло",
+      "observed": [
+        "после нажатия «Заметка» переключатель: Встреча / Дело / Заметка* / Др",
+        "полка «Заметки»: [{\"title\":\"Витамины\",\"pill\":\"заметка\"}]",
+        "полка «Дела» после переноса: [\"Забрать посылку\"]",
+        "«Витамины» теперь на полке «Заметки» и исчезли с «Дел»"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/13-shelf-notes.png"
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Настройки → «Как поставить на экран телефона» открывает «Три шага»",
+      "status": "прошло",
+      "observed": [
+        "экран: «Настройки»",
+        "пункты настроек: [\"Сегодня\",\"Встречи\",\"Дела\",\"Заметки\",\"Дни рождения\",\"Встречи — заранее\",\"Дела — заранее\",\"Будильник на встречи\",\"Вечерний разбор\",\"Уведомления\",\"Как поставить на экран телефона\",\"Люди и пресеты\",\"Выйти\"]",
+        "подпись пункта: «код, установка, уведомления»",
+        "после нажатия: экран=«Три шага», пунктов=3, кнопка «назад» ведёт на «settings»",
+        "пункт есть и открывает экран «Три шага» с тремя пунктами"
+      ],
+      "defects": [],
+      "shots": [
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/14-settings-list.png",
+        "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/15-tri-shaga-from-settings.png"
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Сбор ошибок JS и сетевых ответов 4xx/5xx",
+      "status": "прошло",
+      "observed": [
+        "JS-исключений: 0; console error/warning: 0; сетевых 4xx/5xx и сбоев: 0; записей Log: 0",
+        "сбор выполнен (Log.enable + Runtime.consoleAPICalled + Runtime.exceptionThrown + Network.enable)"
+      ],
+      "defects": [],
+      "shots": []
+    }
+  ],
+  "jsErrors": [],
+  "consoleErrors": [],
+  "netErrors": [],
+  "logEntries": [],
+  "shots": [
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/01-auth.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/02-tri-shaga-after-register.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/03-home-widget.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/04-chat-5a-vitamins.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/05-chat-5b-duplicate.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/06-chat-5v-parcel-chips.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/07-chat-5g-time-set.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/08-shelf-tasks-done.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/09-shelf-tasks-undone.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/10-detail-vitamins-4blocks.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/11-detail-repeat-wheel.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/12-saved-back-to-shelves.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/13-shelf-notes.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/14-settings-list.png",
+    "/Users/valerii/Downloads/psyche_circles/voicecapture/qa/screens/15-tri-shaga-from-settings.png"
+  ]
+}

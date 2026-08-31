@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Палитра C · Тихий teal -->
+    <color name="colorPrimary">#3D7A72</color>
+    <color name="colorPrimaryDark">#2F625C</color>
+    <color name="colorAccent">#3D7A72</color>
+    <color name="splashBackground">#F3F7F6</color>
+    <color name="appBackground">#F3F7F6</color>
+    <color name="widgetInk">#1C2A28</color>
+    <color name="widgetMuted">#5F726E</color>
+    <color name="widgetAccent">#3D7A72</color>
+    <color name="widgetDanger">#8F5651</color>
+    <color name="widgetOnAccent">#F3F7F6</color>
+</resources>

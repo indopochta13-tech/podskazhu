@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ru.soulvoice.app",
+      "sha256_cert_fingerprints": [
+        "C1:C9:42:3E:6A:AE:5C:9F:7D:53:BB:58:1F:4E:89:7E:97:0D:21:AC:68:1D:E6:2D:9B:53:B2:19:1D:65:B4:48"
+      ]
+    }
+  }
+]

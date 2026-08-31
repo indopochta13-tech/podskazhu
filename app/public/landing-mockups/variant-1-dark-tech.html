@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Макет 01 · Dark Tech</title>
+<style>
+  :root { --bg:#0a0e17; --card:#121a27; --accent:#00d4aa; --text:#e8eef4; --muted:#7a8a9a; --line:#1e2d3d; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:"SF Mono","Menlo",monospace; background:var(--bg); color:var(--text); line-height:1.5; }
+  body::before { content:""; position:fixed; inset:0; background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px); background-size:48px 48px; opacity:.35; pointer-events:none; }
+  .mock { position:sticky; top:0; z-index:99; background:#00d4aa; color:#000; text-align:center; padding:8px; font-size:12px; font-weight:700; }
+  .wrap { max-width:1080px; margin:0 auto; padding:48px 24px 80px; position:relative; }
+  nav { display:flex; justify-content:space-between; align-items:center; margin-bottom:64px; font-size:13px; }
+  nav span { color:var(--accent); }
+  .hero { display:grid; grid-template-columns:1fr 280px; gap:48px; align-items:center; margin-bottom:80px; }
+  @media(max-width:768px){ .hero{ grid-template-columns:1fr; } }
+  h1 { font-size:clamp(2rem,5vw,3.2rem); font-weight:700; line-height:1.1; margin-bottom:16px; }
+  h1 em { color:var(--accent); font-style:normal; }
+  .lead { color:var(--muted); font-size:1rem; max-width:520px; margin-bottom:28px; font-family:-apple-system,sans-serif; }
+  .btns { display:flex; gap:12px; flex-wrap:wrap; }
+  .btn { padding:12px 24px; border-radius:6px; font-size:14px; text-decoration:none; font-family:-apple-system,sans-serif; }
+  .btn-p { background:var(--accent); color:#000; font-weight:600; }
+  .btn-s { border:1px solid var(--line); color:var(--text); }
+  .photo { width:280px; height:320px; border-radius:12px; overflow:hidden; border:2px solid var(--accent); box-shadow:0 0 40px rgba(0,212,170,.15); }
+  .photo img { width:100%; height:115%; object-fit:cover; object-position:center 8%; margin-top:-5%; }
+  h2 { font-size:11px; letter-spacing:.15em; text-transform:uppercase; color:var(--accent); margin-bottom:20px; }
+  .sec { margin-bottom:64px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; }
+  .card h3 { font-size:15px; margin-bottom:8px; font-family:-apple-system,sans-serif; }
+  .card p { font-size:13px; color:var(--muted); font-family:-apple-system,sans-serif; }
+  .proj { display:grid; gap:12px; }
+  .proj-item { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:var(--card); border:1px solid var(--line); border-radius:8px; font-family:-apple-system,sans-serif; font-size:14px; }
+  .proj-item a { color:var(--accent); text-decoration:none; font-size:12px; }
+  table { width:100%; border-collapse:collapse; font-family:-apple-system,sans-serif; font-size:14px; }
+  th,td { padding:14px 16px; text-align:left; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; }
+  footer { border-top:1px solid var(--line); padding-top:32px; font-size:13px; color:var(--muted); font-family:-apple-system,sans-serif; }
+</style>
+</head>
+<body>
+<div class="mock">МАКЕТ 01 · Dark Tech — для выбора стиля</div>
+<div class="wrap">
+  <nav><strong>volkov<span>.dev</span></strong><span>indopochte13@gmail.com</span></nav>
+  <section class="hero">
+    <div>
+      <h1>Разрабатываю <em>приложения,</em> ботов и автоматизацию под ключ</h1>
+      <p class="lead">Volkov Valerii — independent software engineer. Мобильные приложения, сайты, Telegram-боты, backend, DevOps. Самозанятый (НПД), Россия.</p>
+      <div class="btns">
+        <a class="btn btn-p" href="mailto:indopochte13@gmail.com">Обсудить проект</a>
+        <a class="btn btn-s" href="#works">Примеры работ</a>
+      </div>
+    </div>
+    <div class="photo"><img src="photo.jpg" alt="Volkov Valerii"></div>
+  </section>
+  <section class="sec">
+    <h2>// services</h2>
+    <div class="cards">
+      <div class="card"><h3>Мобильные приложения</h3><p>Android, Capacitor, виджеты, RuStore</p></div>
+      <div class="card"><h3>Сайты и веб-приложения</h3><p>Лендинги, админки, PWA, API</p></div>
+      <div class="card"><h3>Telegram-боты</h3><p>Mini Apps, CRM, оплата, автоматизация</p></div>
+      <div class="card"><h3>Любая автоматизация</h3><p>Скрипты, интеграции, пайплайны, cron</p></div>
+    </div>
+  </section>
+  <section class="sec" id="works">
+    <h2>// portfolio</h2>
+    <div class="proj">
+      <div class="proj-item"><span>Психея — Telegram Mini App</span><a href="#">tg.psycheecosystem.com</a></div>
+      <div class="proj-item"><span>SoulVoice — голос → задачи</span><a href="#">APK + PWA</a></div>
+      <div class="proj-item"><span>Market Pulse — сигналы</span><a href="#">pulse dashboard</a></div>
+      <div class="proj-item"><span>VPN Bot Pulse209</span><a href="#">@Pulse209VPN_bot</a></div>
+    </div>
+  </section>
+  <section class="sec">
+    <h2>// timelines</h2>
+    <table>
+      <tr><th>Тип проекта</th><th>Срок</th></tr>
+      <tr><td>Лендинг / сайт</td><td>3–7 дней</td></tr>
+      <tr><td>Telegram-бот</td><td>1–2 недели</td></tr>
+      <tr><td>Mini App / веб-приложение</td><td>2–4 недели</td></tr>
+      <tr><td>Мобильное приложение</td><td>3–6 недель</td></tr>
+      <tr><td>Скрипт автоматизации</td><td>2–7 дней</td></tr>
+    </table>
+  </section>
+  <footer>indopochte13@gmail.com · github.com/indopochta13-tech · Политика конфиденциальности · Согласие на обработку данных</footer>
+</div>
+</body>
+</html>

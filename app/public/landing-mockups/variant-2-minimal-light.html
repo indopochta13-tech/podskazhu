@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Макет 02 · Minimal Light</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; background:#fff; color:#111; line-height:1.6; }
+  .mock { background:#111; color:#fff; text-align:center; padding:8px; font-size:12px; font-weight:600; letter-spacing:.05em; }
+  .wrap { max-width:960px; margin:0 auto; padding:56px 28px 100px; }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:80px; border-bottom:1px solid #eee; padding-bottom:40px; }
+  .photo { width:200px; height:240px; overflow:hidden; flex-shrink:0; }
+  .photo img { width:100%; height:115%; object-fit:cover; object-position:center 8%; margin-top:-5%; filter:grayscale(20%); }
+  .intro { flex:1; padding-right:48px; }
+  h1 { font-size:3.5rem; font-weight:300; letter-spacing:-.03em; line-height:1.05; margin-bottom:24px; }
+  h1 b { font-weight:700; }
+  .sub { font-size:1.15rem; color:#555; max-width:440px; margin-bottom:32px; }
+  .email { font-size:1rem; color:#111; text-decoration:none; border-bottom:2px solid #111; padding-bottom:2px; }
+  h2 { font-size:.75rem; letter-spacing:.2em; text-transform:uppercase; color:#999; margin:64px 0 24px; }
+  .services { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:#eee; border:1px solid #eee; }
+  @media(max-width:640px){ .services,.top{ grid-template-columns:1fr; flex-direction:column-reverse; } .intro{padding-right:0;margin-top:32px;} h1{font-size:2.4rem;} }
+  .svc { background:#fff; padding:28px; }
+  .svc h3 { font-size:1rem; font-weight:600; margin-bottom:8px; }
+  .svc p { font-size:.9rem; color:#666; }
+  .work { border-top:1px solid #eee; padding:20px 0; display:flex; justify-content:space-between; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  .work span { font-weight:500; }
+  .work a { color:#111; font-size:.85rem; opacity:.5; text-decoration:none; }
+  .time { width:100%; margin-top:16px; }
+  .time tr { border-bottom:1px solid #f0f0f0; }
+  .time td { padding:14px 0; font-size:.95rem; }
+  .time td:last-child { text-align:right; color:#666; }
+  footer { margin-top:80px; padding-top:24px; border-top:1px solid #eee; font-size:.85rem; color:#999; display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+</style>
+</head>
+<body>
+<div class="mock">МАКЕТ 02 · Minimal Light</div>
+<div class="wrap">
+  <div class="top">
+    <div class="intro">
+      <h1>Volkov <b>Valerii</b></h1>
+      <p class="sub">Independent software engineer. Разработка мобильных приложений, сайтов, ботов и автоматизации для бизнеса. Россия, самозанятый.</p>
+      <a class="email" href="mailto:indopochte13@gmail.com">indopochte13@gmail.com</a>
+    </div>
+    <div class="photo"><img src="photo.jpg" alt="Volkov Valerii"></div>
+  </div>
+  <h2>Услуги</h2>
+  <div class="services">
+    <div class="svc"><h3>Мобильные приложения</h3><p>Android, Capacitor, виджеты, публикация в RuStore</p></div>
+    <div class="svc"><h3>Сайты</h3><p>Лендинги, веб-приложения, админ-панели</p></div>
+    <div class="svc"><h3>Боты</h3><p>Telegram, VK — CRM, оплаты, Mini Apps</p></div>
+    <div class="svc"><h3>Автоматизация</h3><p>Любые скрипты, интеграции, пайплайны</p></div>
+  </div>
+  <h2>Работы</h2>
+  <div class="work"><span>Психея — Mini App</span><a>tg.psycheecosystem.com</a></div>
+  <div class="work"><span>SoulVoice — голос → задачи</span><a>Android + PWA</a></div>
+  <div class="work"><span>Market Pulse</span><a>reisignaltrend.com/pulse</a></div>
+  <div class="work"><span>VPN Bot Pulse209</span><a>@Pulse209VPN_bot</a></div>
+  <h2>Примерные сроки</h2>
+  <table class="time">
+    <tr><td>Лендинг / сайт</td><td>3–7 дней</td></tr>
+    <tr><td>Telegram-бот</td><td>1–2 недели</td></tr>
+    <tr><td>Mini App</td><td>2–4 недели</td></tr>
+    <tr><td>Мобильное приложение</td><td>3–6 недель</td></tr>
+    <tr><td>Автоматизация</td><td>2–7 дней</td></tr>
+  </table>
+  <footer>
+    <span>© Volkov Valerii · github.com/indopochta13-tech</span>
+    <span>Конфиденциальность · Согласие</span>
+  </footer>
+</div>
+</body>
+</html>

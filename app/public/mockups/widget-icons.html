@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Иконки виджета · согласование</title>
+  <style>
+    :root {
+      --accent: #3d7a72;
+      --soft: #e2efec;
+      --screen: #f3f7f6;
+      --ink: #1c2a28;
+      --muted: #5f726e;
+      --line: #d9e4e1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      background: var(--screen);
+      color: var(--ink);
+      padding: 28px 18px 72px;
+      line-height: 1.45;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; }
+    h1 { font-size: 24px; font-weight: 740; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .lead { color: var(--muted); margin-bottom: 22px; max-width: 64ch; }
+    h2 {
+      font-size: 15px; font-weight: 740; color: var(--accent);
+      margin: 28px 0 12px; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 18px;
+      padding: 16px; text-align: center;
+    }
+    .card img {
+      width: 112px; height: 112px; object-fit: contain;
+      border-radius: 20px; background: var(--soft);
+      display: block; margin: 0 auto 12px;
+    }
+    .lab { font-size: 14px; font-weight: 720; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .preview {
+      margin-top: 10px; display: flex; justify-content: center; gap: 8px;
+    }
+    .preview span {
+      width: 36px; height: 36px; border-radius: 10px; background: var(--soft);
+      display: grid; place-items: center; overflow: hidden;
+    }
+    .preview img { width: 22px; height: 22px; margin: 0; border-radius: 0; background: transparent; }
+    .foot {
+      margin-top: 28px; padding: 14px 16px; background: #fff;
+      border: 1px solid var(--line); border-radius: 14px; color: var(--muted); font-size: 14px;
+    }
+    code { color: var(--ink); font-weight: 650; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Иконки для виджета</h1>
+    <p class="lead">
+      Тихий teal. По 3 варианта: корзина, будильник, карандаш.
+      Напишите набор букв, например <code>корзина B · будильник A · карандаш C</code> —
+      после этого вставлю выбранные в виджет.
+    </p>
+
+    <h2>Корзина</h2>
+    <div class="row">
+      <article class="card">
+        <img src="widget-icons/widget-icon-trash-a.png" alt="Trash A" />
+        <div class="lab">A · классика</div>
+        <div class="hint">заполненная, простая</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-trash-a.png" alt="" /></span></div>
+      </article>
+      <article class="card">
+        <img src="widget-icons/widget-icon-trash-b.png" alt="Trash B" />
+        <div class="lab">B · мягкая</div>
+        <div class="hint">округлее, дружелюбнее</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-trash-b.png" alt="" /></span></div>
+      </article>
+      <article class="card">
+        <img src="widget-icons/widget-icon-trash-c.png" alt="Trash C" />
+        <div class="lab">C · контур</div>
+        <div class="hint">тонкая, воздушная</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-trash-c.png" alt="" /></span></div>
+      </article>
+    </div>
+
+    <h2>Будильник</h2>
+    <div class="row">
+      <article class="card">
+        <img src="widget-icons/widget-icon-alarm-a.png" alt="Alarm A" />
+        <div class="lab">A · классика</div>
+        <div class="hint">заполненный циферблат</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-alarm-a.png" alt="" /></span></div>
+      </article>
+      <article class="card">
+        <img src="widget-icons/widget-icon-alarm-b.png" alt="Alarm B" />
+        <div class="lab">B · мягче</div>
+        <div class="hint">современные пропорции</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-alarm-b.png" alt="" /></span></div>
+      </article>
+      <article class="card">
+        <img src="widget-icons/widget-icon-alarm-c.png" alt="Alarm C" />
+        <div class="lab">C · контур</div>
+        <div class="hint">тонкий, спокойный</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-alarm-c.png" alt="" /></span></div>
+      </article>
+    </div>
+
+    <h2>Карандаш</h2>
+    <div class="row">
+      <article class="card">
+        <img src="widget-icons/widget-icon-edit-a.png" alt="Edit A" />
+        <div class="lab">A · классика</div>
+        <div class="hint">заполненный, чёткий</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-edit-a.png" alt="" /></span></div>
+      </article>
+      <article class="card">
+        <img src="widget-icons/widget-icon-edit-b.png" alt="Edit B" />
+        <div class="lab">B · мягче</div>
+        <div class="hint">с ластиком, дружелюбный</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-edit-b.png" alt="" /></span></div>
+      </article>
+      <article class="card">
+        <img src="widget-icons/widget-icon-edit-c.png" alt="Edit C" />
+        <div class="lab">C · контур</div>
+        <div class="hint">тонкий outline</div>
+        <div class="preview"><span><img src="widget-icons/widget-icon-edit-c.png" alt="" /></span></div>
+      </article>
+    </div>
+
+    <p class="foot">
+      Цифра «2» справа вверху была счётчиком записей на активной закладке — убрал вместе с «SoulVoice».
+      После выбора букв соберу APK.
+    </p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Icon render</title>
+<style>
+  html, body { margin: 0; background: #111; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1024" height="1024"></canvas>
+<script type="module">
+import { createCloud } from "/cloud.js";
+
+const params = new URLSearchParams(location.search);
+const mode = params.get("mode") || "listening";
+const level = Number(params.get("level") || "0.62");
+const bg = params.get("bg") || "#f3f0eb";
+const color = params.get("color") || "92, 82, 72";
+const vivid = params.get("vivid") !== "0";
+const frames = Number(params.get("frames") || "96");
+
+const canvas = document.getElementById("c");
+const cloud = createCloud(canvas, {
+  background: bg,
+  color,
+  vivid,
+  radius: Math.min(canvas.width, canvas.height) * 0.34,
+});
+
+cloud.setMode(mode);
+cloud.setLevel(level);
+
+let n = 0;
+function tick() {
+  n += 1;
+  if (n >= frames) {
+    window.__ICON_READY__ = true;
+    return;
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

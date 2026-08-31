@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VoiceCapture — макет</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #dfe3e0;
+    --desk: #cfd5d1;
+    --phone: #1a1f1c;
+    --screen: #f4f6f4;
+    --surface: #ffffff;
+    --ink: #1e2823;
+    --muted: #6b756f;
+    --line: #e2e7e3;
+    --accent: #3f5c4e;
+    --accent-soft: #e7eee9;
+    --warn: #8a6a3a;
+    --warn-soft: #f3ecdf;
+    --danger: #8b4a45;
+    --danger-soft: #f3e6e5;
+    --ok: #3f5c4e;
+    --shadow: 0 18px 50px rgba(30, 40, 35, 0.18);
+    --radius: 18px;
+    --font: "Manrope", sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background:
+      radial-gradient(900px 500px at 20% 0%, #e8ece8 0%, transparent 55%),
+      radial-gradient(700px 400px at 90% 100%, #d5ddd8 0%, transparent 50%),
+      var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 48px;
+  }
+
+  .page-head {
+    width: min(980px, 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  .page-head h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .page-head p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+    max-width: 420px;
+    line-height: 1.45;
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(30,40,35,0.08);
+    padding: 10px 12px;
+    border-radius: 12px;
+    max-width: 280px;
+    line-height: 1.4;
+  }
+
+  .stage {
+    width: min(980px, 100%);
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .stage { grid-template-columns: 1fr; justify-items: center; }
+    .side { width: min(340px, 100%); }
+  }
+
+  .phone-wrap {
+    filter: drop-shadow(var(--shadow));
+  }
+  .phone {
+    width: 340px;
+    height: 700px;
+    background: var(--phone);
+    border-radius: 42px;
+    padding: 12px;
+    position: relative;
+  }
+  .phone-inner {
+    background: var(--screen);
+    height: 100%;
+    border-radius: 32px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .notch {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 28px;
+    background: var(--phone);
+    border-radius: 20px;
+    z-index: 5;
+  }
+  .status {
+    height: 48px;
+    padding: 16px 20px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    flex-shrink: 0;
+  }
+
+  .screen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  .screen.active { display: flex; }
+
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll::-webkit-scrollbar { width: 0; }
+
+  button, .tap {
+    font-family: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: inherit;
+  }
+  button:active, .tap:active { transform: scale(0.98); }
+
+  /* —— Home / widget —— */
+  .wallpaper {
+    flex: 1;
+    background:
+      linear-gradient(165deg, #b7c4bc 0%, #8fa396 42%, #6f8578 100%);
+    padding: 56px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .home-clock {
+    color: rgba(255,255,255,0.92);
+    text-align: center;
+    margin-top: 8px;
+  }
+  .home-clock .time { font-size: 56px; font-weight: 600; letter-spacing: -0.04em; line-height: 1; }
+  .home-clock .date { font-size: 14px; opacity: 0.85; margin-top: 6px; }
+
+  .widget {
+    background: rgba(244,246,244,0.94);
+    backdrop-filter: blur(8px);
+    border-radius: 26px;
+    padding: 16px 12px 14px;
+    box-shadow: 0 8px 24px rgba(20,30,25,0.12);
+  }
+  .widget-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 0 6px;
+  }
+  .w-btn {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+  .w-btn svg { width: 24px; height: 24px; }
+  .w-btn.primary {
+    width: 68px;
+    height: 68px;
+    background: var(--accent);
+    color: #f4f6f4;
+  }
+  .w-btn.primary svg { width: 28px; height: 28px; }
+  .w-cap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+  }
+  .w-cap span {
+    font-size: 11px;
+    font-weight: 650;
+    color: var(--ink);
+    opacity: 0.72;
+  }
+
+  /* —— Wheel pickers —— */
+  .pick-block {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color .15s;
+  }
+  .pick-block.open {
+    border-color: #b7c4bc;
+  }
+  .pick-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 12px;
+    text-align: left;
+  }
+  .pick-head .lab {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    min-width: 72px;
+  }
+  .pick-head .val {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .pick-ico {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .pick-block.open .pick-ico {
+    background: var(--accent);
+    color: #f4f6f4;
+  }
+  .pick-ico svg { width: 18px; height: 18px; }
+  .pick-body {
+    display: none;
+    padding: 0 8px 14px;
+    border-top: 1px solid var(--line);
+  }
+  .pick-block.open .pick-body { display: block; }
+  .wheels {
+    display: flex;
+    gap: 6px;
+    position: relative;
+    height: 168px;
+    margin-top: 10px;
+  }
+  .wheels::before {
+    content: "";
+    position: absolute;
+    left: 4px; right: 4px;
+    top: 50%;
+    height: 36px;
+    transform: translateY(-50%);
+    background: var(--accent-soft);
+    border-radius: 10px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .wheel {
+    flex: 1;
+    height: 168px;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    z-index: 1;
+    scrollbar-width: none;
+  }
+  .wheel::-webkit-scrollbar { display: none; }
+  .wheel-pad { height: 66px; flex-shrink: 0; }
+  .wheel-item {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--muted);
+    scroll-snap-align: center;
+    opacity: 0.45;
+  }
+  .wheel-item.on {
+    color: var(--ink);
+    opacity: 1;
+    font-weight: 700;
+  }
+  .pick-hint {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+  .shortcut-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    text-align: left;
+  }
+  .shortcut-row .name {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .dock {
+    margin-top: auto;
+    background: rgba(255,255,255,0.22);
+    border-radius: 22px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 12px;
+  }
+  .dock span {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: rgba(255,255,255,0.35);
+  }
+
+  /* —— App chrome —— */
+  .app-bar {
+    padding: 8px 8px 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .app-bar h2 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    flex: 1;
+  }
+  .icon-btn {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: grid; place-items: center;
+    color: var(--ink);
+  }
+  .icon-btn:hover { background: var(--accent-soft); }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  .tabs {
+    display: flex;
+    gap: 6px;
+    padding: 0 16px 10px;
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .tab.on {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 10px;
+    text-align: left;
+    width: 100%;
+  }
+  .card:hover { border-color: #c8d1cb; }
+  .card .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 10px;
+  }
+  .card .title { font-size: 15px; font-weight: 650; line-height: 1.3; }
+  .card .meta { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.35; }
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 36px 12px;
+    line-height: 1.5;
+  }
+
+  /* —— Chat —— */
+  .chat-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .bubble {
+    max-width: 92%;
+    border-radius: 16px;
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .bubble.me {
+    align-self: flex-end;
+    background: var(--accent);
+    color: #f4f6f4;
+    border-bottom-right-radius: 6px;
+  }
+  .bubble.ai {
+    align-self: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-bottom-left-radius: 6px;
+  }
+  .bubble.ai strong { font-weight: 700; display: block; margin-bottom: 6px; font-size: 13px; }
+  .ai-lines { color: var(--ink); font-size: 13px; }
+  .ai-lines div { margin-top: 2px; }
+  .ai-bell { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .chip {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .chip.ghost {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .chip.danger {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .composer {
+    border-top: 1px solid var(--line);
+    padding: 10px 12px 14px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: var(--screen);
+    flex-shrink: 0;
+  }
+  .composer input {
+    flex: 1;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font: 500 14px var(--font);
+    color: var(--ink);
+    outline: none;
+  }
+  .composer input:focus { border-color: #b7c4bc; }
+  .composer .send, .composer .mic {
+    width: 44px; height: 44px;
+    border-radius: 14px;
+    background: var(--accent);
+    color: #f4f6f4;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .composer .mic { background: var(--accent-soft); color: var(--accent); }
+
+  /* —— Record —— */
+  .record {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    background: var(--screen);
+  }
+  .rec-ring {
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    display: grid; place-items: center;
+    position: relative;
+  }
+  .rec-ring::after {
+    content: "";
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    border: 2px solid rgba(63,92,78,0.25);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(1.06); opacity: 1; }
+  }
+  .rec-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--danger);
+  }
+  .rec-text { font-size: 15px; color: var(--muted); text-align: center; line-height: 1.45; }
+  .rec-actions { display: flex; gap: 10px; margin-top: 8px; }
+  .btn {
+    padding: 12px 18px;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 650;
+    background: var(--accent);
+    color: #f4f6f4;
+  }
+  .btn.ghost {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  .btn.block { width: 100%; }
+  .btn.warn { background: var(--warn); }
+  .btn.danger { background: var(--danger); }
+
+  /* —— Detail / forms —— */
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 650;
+    color: var(--muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .field input, .field select, .field textarea {
+    width: 100%;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 12px 12px;
+    font: 500 14px var(--font);
+    color: var(--ink);
+    outline: none;
+  }
+  .field textarea { min-height: 72px; resize: none; }
+  .actions-col { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+
+  .people {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .person {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    text-align: left;
+    width: 100%;
+  }
+  .person.on { border-color: var(--accent); background: var(--accent-soft); }
+  .check {
+    width: 20px; height: 20px;
+    border-radius: 6px;
+    border: 1.5px solid #aab4ad;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .person.on .check {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-size: 12px;
+  }
+  .presets { display: flex; gap: 8px; margin-bottom: 12px; }
+  .preset {
+    flex: 1;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .preset.on { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+  .settings-list { display: flex; flex-direction: column; gap: 8px; }
+  .setting {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .setting .name { font-size: 14px; font-weight: 600; }
+  .setting .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .toggle {
+    width: 42px; height: 26px;
+    border-radius: 999px;
+    background: #c5cdc8;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle i {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: left .15s;
+  }
+  .toggle.on i { left: 19px; }
+
+  .toast {
+    position: absolute;
+    left: 16px; right: 16px; bottom: 22px;
+    background: var(--ink);
+    color: #f4f6f4;
+    padding: 12px 14px;
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 20;
+    display: none;
+    text-align: center;
+  }
+  .toast.show { display: block; animation: fadeSlide .25s ease; }
+  @keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Side map */
+  .side {
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(30,40,35,0.08);
+    border-radius: 20px;
+    padding: 16px;
+  }
+  .side h3 {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    letter-spacing: -0.01em;
+  }
+  .map {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .map button {
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    background: transparent;
+  }
+  .map button:hover, .map button.on { background: var(--accent-soft); color: var(--accent); }
+  .map .group {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 10px 0 2px 4px;
+  }
+  .legend {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    border-top: 1px solid rgba(30,40,35,0.08);
+    padding-top: 12px;
+  }
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <div>
+      <h1>VoiceCapture — кликабельный макет</h1>
+      <p>Спокойный функциональный прототип. Жмите виджет и экраны справа — всё связано.</p>
+    </div>
+    <div class="hint">Виджет: чат · запись · закладка. В карточке тап по дате/времени → карусель, ещё тап по иконке → свернуть.</div>
+  </div>
+
+  <div class="stage">
+    <div class="phone-wrap">
+      <div class="phone">
+        <div class="phone-inner" id="phone">
+          <div class="notch"></div>
+
+          <!-- HOME -->
+          <section class="screen active" data-screen="home">
+            <div class="wallpaper">
+              <div class="home-clock">
+                <div class="time">9:41</div>
+                <div class="date">воскресенье, 2 августа</div>
+              </div>
+
+              <div class="widget" id="widget">
+                <div class="widget-actions">
+                  <div class="w-cap">
+                    <button class="w-btn" data-go="chat" title="Чат" aria-label="Чат">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 6h14v9H9l-4 3V6z"/></svg>
+                    </button>
+                    <span>Чат</span>
+                  </div>
+                  <div class="w-cap">
+                    <button class="w-btn primary" data-go="record" title="Запись" aria-label="Запись">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+                    </button>
+                    <span>Запись</span>
+                  </div>
+                  <div class="w-cap">
+                    <button class="w-btn" id="widget-shortcut" title="Закладка" aria-label="Закладка">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4h8v16l-4-3-4 3V4z"/></svg>
+                    </button>
+                    <span id="widget-shortcut-label">Дела</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dock" aria-hidden="true">
+                <span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+          </section>
+
+          <!-- RECORD -->
+          <section class="screen" data-screen="record">
+            <div class="status"><span>9:41</span><span>●●●</span></div>
+            <div class="app-bar">
+              <button class="icon-btn" data-go="home" aria-label="Назад">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+              </button>
+              <h2>Запись</h2>
+              <button class="icon-btn" data-go="chat" title="Текстом">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+              </button>
+            </div>
+            <div class="record">
+              <div class="rec-ring"><div class="rec-dot"></div></div>
+              <div class="rec-text">Слушаю…<br/>«встреча завтра в 10 на Таганке»</div>
+              <div class="rec-actions">
+                <button class="btn ghost" data-go="home">Отмена</button>
+                <button class="btn" id="finish-record">Готово</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- CHAT -->
+          <section class="screen" data-screen="chat">
+            <div class="status"><span>9:41</span><span>●●●</span></div>
+            <div class="app-bar">
+              <button class="icon-btn" data-go="home" aria-label="Назад">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+              </button>
+              <h2>Чат</h2>
+              <button class="icon-btn" data-go="shelves" title="Полки">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+              </button>
+              <button class="icon-btn" data-go="settings" title="Настройки">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></svg>
+              </button>
+            </div>
+            <div class="chat-log" id="chat-log"></div>
+            <div class="composer">
+              <button class="mic" data-go="record" aria-label="Голос">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+              </button>
+              <input id="chat-input" type="text" placeholder="Встреча, дело, отмена…" autocomplete="off" />
+              <button class="send" id="chat-send" aria-label="Отправить">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12l16-7-7 16-2-7-7-2z"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <!-- SHELVES -->
+          <section class="screen" data-screen="shelves">
+            <div class="status"><span>9:41</span><span>●●●</span></div>
+            <div class="app-bar">
+              <button class="icon-btn" data-go="home" aria-label="Назад">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+              </button>
+              <h2>Полки</h2>
+              <button class="icon-btn" data-go="chat" title="Чат">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+              </button>
+              <button class="icon-btn" data-go="settings" title="Настройки">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></svg>
+              </button>
+            </div>
+            <div class="tabs" id="shelf-tabs">
+              <button class="tab on" data-shelf="today">Сегодня</button>
+              <button class="tab" data-shelf="meetings">Встречи</button>
+              <button class="tab" data-shelf="tasks">Дела</button>
+              <button class="tab" data-shelf="notes">Заметки</button>
+              <button class="tab" data-shelf="bday">Дни рождения</button>
+            </div>
+            <div class="scroll" id="shelf-list"></div>
+          </section>
+
+          <!-- DETAIL -->
+          <section class="screen" data-screen="detail">
+            <div class="status"><span>9:41</span><span>●●●</span></div>
+            <div class="app-bar">
+              <button class="icon-btn" data-go="shelves" aria-label="Назад">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+              </button>
+              <h2>Карточка</h2>
+              <span style="width:40px"></span>
+            </div>
+            <div class="scroll" id="detail-body"></div>
+          </section>
+
+          <!-- SEND -->
+          <section class="screen" data-screen="send">
+            <div class="status"><span>9:41</span><span>●●●</span></div>
+            <div class="app-bar">
+              <button class="icon-btn" data-go="detail" aria-label="Назад">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+              </button>
+              <h2>Отправить</h2>
+              <span style="width:40px"></span>
+            </div>
+            <div class="scroll">
+              <div class="presets">
+                <button class="preset" data-preset="work">Работа</button>
+                <button class="preset" data-preset="home">Дом</button>
+                <button class="preset on" data-preset="pick">Люди</button>
+              </div>
+              <div class="people" id="people-list"></div>
+              <div class="actions-col" style="margin-top:14px">
+                <button class="btn block" id="send-confirm">Отправить выбранным</button>
+                <button class="btn ghost block" data-go="detail">Отмена</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- SETTINGS -->
+          <section class="screen" data-screen="settings">
+            <div class="status"><span>9:41</span><span>●●●</span></div>
+            <div class="app-bar">
+              <button class="icon-btn" data-go="shelves" aria-label="Назад">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+              </button>
+              <h2>Настройки</h2>
+              <span style="width:40px"></span>
+            </div>
+            <div class="scroll">
+              <div class="settings-list">
+                <div style="margin-bottom:4px;padding:0 2px 6px">
+                  <div class="name" style="font-size:14px;font-weight:600">Правая кнопка виджета</div>
+                  <div class="sub" style="font-size:12px;color:var(--muted);margin-top:2px">что открывать · один вариант</div>
+                </div>
+                <div class="shortcut-rows" id="shortcut-grid">
+                  <button class="shortcut-row" data-shortcut="today">
+                    <span class="name">Сегодня</span>
+                    <div class="toggle" data-shortcut-tog="today"><i></i></div>
+                  </button>
+                  <button class="shortcut-row" data-shortcut="meetings">
+                    <span class="name">Встречи</span>
+                    <div class="toggle" data-shortcut-tog="meetings"><i></i></div>
+                  </button>
+                  <button class="shortcut-row" data-shortcut="tasks">
+                    <span class="name">Дела</span>
+                    <div class="toggle on" data-shortcut-tog="tasks"><i></i></div>
+                  </button>
+                  <button class="shortcut-row" data-shortcut="notes">
+                    <span class="name">Заметки</span>
+                    <div class="toggle" data-shortcut-tog="notes"><i></i></div>
+                  </button>
+                  <button class="shortcut-row" data-shortcut="bday">
+                    <span class="name">Дни рождения</span>
+                    <div class="toggle" data-shortcut-tog="bday"><i></i></div>
+                  </button>
+                </div>
+                <div class="setting">
+                  <div>
+                    <div class="name">Напоминать заранее</div>
+                    <div class="sub">за 15 минут до встречи</div>
+                  </div>
+                  <span class="pill">15 мин</span>
+                </div>
+                <button class="setting" data-toggle="alarm">
+                  <div>
+                    <div class="name">Будильник на встречи</div>
+                    <div class="sub">громче обычного пуша</div>
+                  </div>
+                  <div class="toggle on" id="tog-alarm"><i></i></div>
+                </button>
+                <button class="setting" data-toggle="evening">
+                  <div>
+                    <div class="name">Вечерний разбор</div>
+                    <div class="sub">хвост без срока · 20:00</div>
+                  </div>
+                  <div class="toggle on" id="tog-evening"><i></i></div>
+                </button>
+                <button class="setting" data-toggle="audio">
+                  <div>
+                    <div class="name">Удалять аудио</div>
+                    <div class="sub">после разбора</div>
+                  </div>
+                  <div class="toggle on" id="tog-audio"><i></i></div>
+                </button>
+                <div class="setting" data-go="people-settings" style="cursor:pointer" id="go-people">
+                  <div>
+                    <div class="name">Люди и пресеты</div>
+                    <div class="sub">Работа · Дом · список</div>
+                  </div>
+                  <span class="chev" style="color:var(--muted)">›</span>
+                </div>
+                <div class="setting">
+                  <div>
+                    <div class="name">Ежедневные якоря</div>
+                    <div class="sub">таблетки 21:00 · стендап 10:00</div>
+                  </div>
+                  <span class="chev" style="color:var(--muted)">›</span>
+                </div>
+                <div class="setting">
+                  <div>
+                    <div class="name">Тихие часы</div>
+                    <div class="sub">23:00 – 07:00</div>
+                  </div>
+                  <span class="pill">вкл</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- PEOPLE SETTINGS -->
+          <section class="screen" data-screen="people-settings">
+            <div class="status"><span>9:41</span><span>●●●</span></div>
+            <div class="app-bar">
+              <button class="icon-btn" data-go="settings" aria-label="Назад">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 6l-6 6 6 6"/></svg>
+              </button>
+              <h2>Люди</h2>
+              <span style="width:40px"></span>
+            </div>
+            <div class="scroll">
+              <p style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.45">Кого можно выбрать при «Отправить». Пресеты — быстрые группы.</p>
+              <div class="field">
+                <label>Пресет «Работа»</label>
+                <input value="Саша, Ира, Костя" readonly />
+              </div>
+              <div class="field">
+                <label>Пресет «Дом»</label>
+                <input value="Маша, мама" readonly />
+              </div>
+              <div class="people" style="margin-top:8px">
+                <div class="person"><div class="check"></div><div><div class="title" style="font-size:14px;font-weight:650">Саша</div><div class="meta">работа</div></div></div>
+                <div class="person"><div class="check"></div><div><div class="title" style="font-size:14px;font-weight:650">Ира</div><div class="meta">работа</div></div></div>
+                <div class="person"><div class="check"></div><div><div class="title" style="font-size:14px;font-weight:650">Маша</div><div class="meta">дом</div></div></div>
+                <div class="person"><div class="check"></div><div><div class="title" style="font-size:14px;font-weight:650">мама</div><div class="meta">дом</div></div></div>
+              </div>
+              <div class="actions-col" style="margin-top:14px">
+                <button class="btn ghost block">Добавить человека</button>
+              </div>
+            </div>
+          </section>
+
+          <div class="toast" id="toast"></div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <h3>Экраны</h3>
+      <div class="map" id="screen-map">
+        <div class="group">Вход</div>
+        <button data-go="home" class="on">Домой · виджет</button>
+        <button data-go="record">Запись голоса</button>
+        <button data-go="chat">Чат (текст)</button>
+        <div class="group">Данные</div>
+        <button data-go="shelves">Полки</button>
+        <button data-go="detail">Карточка · правка</button>
+        <button data-go="send">Отправить людям</button>
+        <div class="group">Система</div>
+        <button data-go="settings">Настройки</button>
+        <button data-go="people-settings">Люди и пресеты</button>
+      </div>
+      <div class="legend">
+        Виджет = 3 кнопки. Правую меняете в Настройках.
+        В карточке: Когда / Время / Пуш — карусели без клавиатуры.
+      </div>
+    </aside>
+  </div>
+
+<script>
+const MONTHS = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1));
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINS = ["00","05","10","15","20","25","30","35","40","45","50","55"];
+const REMIND_OFFSETS = [
+  { v: 0, label: "в момент" },
+  { v: 5, label: "за 5 мин" },
+  { v: 10, label: "за 10 мин" },
+  { v: 15, label: "за 15 мин" },
+  { v: 30, label: "за 30 мин" },
+  { v: 60, label: "за 1 час" },
+  { v: 120, label: "за 2 часа" },
+  { v: 1440, label: "за 1 день" },
+];
+
+const SHORTCUTS = {
+  today: { label: "Сегодня", shelf: "today" },
+  meetings: { label: "Встречи", shelf: "meetings" },
+  tasks: { label: "Дела", shelf: "tasks" },
+  notes: { label: "Заметки", shelf: "notes" },
+  bday: { label: "Дни рождения", shelf: "bday" },
+};
+
+const items = [
+  { id: 1, type: "meeting", title: "Встреча на Таганке", day: 3, month: 7, hour: 10, min: "00", remind: 15, place: "Таганка", shelf: ["today","meetings"], alarm: true },
+  { id: 2, type: "task", title: "Купить термопасту", day: 9, month: 7, hour: 10, min: "00", remind: 60, place: "", shelf: ["tasks"], alarm: false },
+  { id: 3, type: "task", title: "Отправить акт Ивану", day: 2, month: 7, hour: 19, min: "00", remind: 15, place: "", shelf: ["today","tasks"], alarm: false },
+  { id: 4, type: "bday", title: "Маша", day: 12, month: 2, hour: 9, min: "00", remind: 1440, place: "", shelf: ["bday"], alarm: false },
+  { id: 5, type: "meeting", title: "Созвон с клиентом", day: 2, month: 7, hour: 12, min: "00", remind: 15, place: "Zoom", shelf: ["today","meetings"], alarm: true },
+  { id: 6, type: "note", title: "Идеи по упаковке", day: 2, month: 7, hour: 0, min: "00", remind: 0, place: "", shelf: ["notes"], alarm: false, noTime: true },
+];
+
+const people = [
+  { id: "sasha", name: "Саша", tag: "работа" },
+  { id: "ira", name: "Ира", tag: "работа" },
+  { id: "kostya", name: "Костя", tag: "работа" },
+  { id: "masha", name: "Маша", tag: "дом" },
+  { id: "mom", name: "мама", tag: "дом" },
+];
+
+let current = "home";
+let activeShelf = "today";
+let activeItemId = 1;
+let selectedPeople = new Set(["sasha", "ira"]);
+let activePreset = "pick";
+let widgetShortcut = "tasks";
+let openPicker = null;
+
+const chatLog = document.getElementById("chat-log");
+const toastEl = document.getElementById("toast");
+
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(() => toastEl.classList.remove("show"), 1800);
+}
+
+function fmtWhen(item) {
+  if (item.noTime) return "без срока";
+  return `${item.day} ${MONTHS[item.month]} · ${String(item.hour).padStart(2,"0")}:${item.min}`;
+}
+
+function fmtRemind(item) {
+  if (item.noTime) return "—";
+  const off = REMIND_OFFSETS.find(r => r.v === item.remind) || REMIND_OFFSETS[3];
+  const total = item.hour * 60 + Number(item.min) - off.v;
+  if (off.v >= 1440) return off.label;
+  if (total < 0) return off.label;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")} · ${off.label}`;
+}
+
+function syncWidgetShortcut() {
+  const cfg = SHORTCUTS[widgetShortcut];
+  document.getElementById("widget-shortcut-label").textContent = cfg.label;
+  document.querySelectorAll("#shortcut-grid [data-shortcut-tog]").forEach(tog => {
+    tog.classList.toggle("on", tog.dataset.shortcutTog === widgetShortcut);
+  });
+}
+
+function openShelf(shelf) {
+  activeShelf = shelf;
+  go("shelves");
+  document.querySelectorAll("#shelf-tabs .tab").forEach(t => t.classList.toggle("on", t.dataset.shelf === shelf));
+  renderShelf();
+}
+
+function go(name) {
+  current = name;
+  document.querySelectorAll(".screen").forEach(s => s.classList.toggle("active", s.dataset.screen === name));
+  document.querySelectorAll("#screen-map button").forEach(b => b.classList.toggle("on", b.dataset.go === name));
+  if (name === "shelves") renderShelf();
+  if (name === "detail") {
+    openPicker = null;
+    renderDetail();
+  }
+  if (name === "send") renderPeople();
+  if (name === "chat" && !chatLog.dataset.ready) {
+    seedChat();
+    chatLog.dataset.ready = "1";
+  }
+}
+
+function seedChat() {
+  chatLog.innerHTML = "";
+  appendMe("встреча завтра в 10 на Таганке");
+  appendAiCard(items[0]);
+}
+
+function appendMe(text) {
+  const el = document.createElement("div");
+  el.className = "bubble me";
+  el.textContent = text;
+  chatLog.appendChild(el);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function appendAiCard(item) {
+  const el = document.createElement("div");
+  el.className = "bubble ai";
+  el.innerHTML = `
+    <strong>Записала</strong>
+    <div class="ai-lines">
+      <div>${escapeHtml(item.title)}</div>
+      <div>${escapeHtml(fmtWhen(item))}${item.place ? " · " + escapeHtml(item.place) : ""}</div>
+    </div>
+    <div class="ai-bell">Напомню · ${escapeHtml(fmtRemind(item))}</div>
+    <div class="chip-row">
+      <button class="chip" data-action="edit" data-id="${item.id}">Изменить</button>
+      <button class="chip danger" data-action="cancel" data-id="${item.id}">Отменить</button>
+      <button class="chip ghost" data-action="alarm" data-id="${item.id}">Будильник</button>
+      <button class="chip ghost" data-action="send" data-id="${item.id}">Отправить</button>
+    </div>
+  `;
+  chatLog.appendChild(el);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function appendAiText(html) {
+  const el = document.createElement("div");
+  el.className = "bubble ai";
+  el.innerHTML = html;
+  chatLog.appendChild(el);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+function renderShelf() {
+  const list = document.getElementById("shelf-list");
+  const filtered = items.filter(i => i.shelf.includes(activeShelf) && !i._cancelled);
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty">Пусто.<br/>С виджета — голос или текст.</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(i => `
+    <button class="card" data-open="${i.id}">
+      <div class="row">
+        <div>
+          <div class="title">${escapeHtml(i.title)}</div>
+          <div class="meta">${escapeHtml(fmtWhen(i))}${i.place ? " · " + escapeHtml(i.place) : ""}${!i.noTime ? "<br/>пуш · " + escapeHtml(fmtRemind(i)) : ""}</div>
+        </div>
+        <span class="pill ${i.type === "bday" ? "warn" : ""}">${labelType(i.type)}</span>
+      </div>
+    </button>
+  `).join("");
+}
+
+function labelType(t) {
+  return ({ meeting: "встреча", task: "дело", bday: "др", note: "заметка" })[t] || t;
+}
+
+function wheelHtml(values, selected, key) {
+  const idx = Math.max(0, values.findIndex(v => String(v) === String(selected)));
+  return `
+    <div class="wheel" data-wheel="${key}" data-index="${idx}">
+      <div class="wheel-pad"></div>
+      ${values.map((v, i) => `<div class="wheel-item ${i === idx ? "on" : ""}" data-i="${i}">${v}</div>`).join("")}
+      <div class="wheel-pad"></div>
+    </div>
+  `;
+}
+
+function remindLabels() {
+  return REMIND_OFFSETS.map(r => r.label);
+}
+
+function renderDetail() {
+  const item = items.find(i => i.id === activeItemId) || items[0];
+  const body = document.getElementById("detail-body");
+  const dateOpen = openPicker === "date";
+  const timeOpen = openPicker === "time";
+  const remindOpen = openPicker === "remind";
+  const remindIdx = Math.max(0, REMIND_OFFSETS.findIndex(r => r.v === item.remind));
+
+  body.innerHTML = `
+    <div class="field"><label>Название</label><input id="f-title" value="${escapeHtml(item.title)}" /></div>
+
+    <div class="pick-block ${dateOpen ? "open" : ""}" data-pick="date">
+      <button class="pick-head" type="button" data-toggle-pick="date">
+        <span class="lab">Когда</span>
+        <span class="val" id="val-date">${item.day} ${MONTHS[item.month]}</span>
+        <span class="pick-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        </span>
+      </button>
+      <div class="pick-body">
+        <div class="wheels">
+          ${wheelHtml(DAYS, item.day, "day")}
+          ${wheelHtml(MONTHS, MONTHS[item.month], "month")}
+        </div>
+        <div class="pick-hint">листай · тап по иконке свернёт</div>
+      </div>
+    </div>
+
+    <div class="pick-block ${timeOpen ? "open" : ""}" data-pick="time">
+      <button class="pick-head" type="button" data-toggle-pick="time">
+        <span class="lab">Время</span>
+        <span class="val" id="val-time">${String(item.hour).padStart(2,"0")}:${item.min}</span>
+        <span class="pick-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg>
+        </span>
+      </button>
+      <div class="pick-body">
+        <div class="wheels">
+          ${wheelHtml(HOURS, String(item.hour).padStart(2,"0"), "hour")}
+          ${wheelHtml(MINS, item.min, "min")}
+        </div>
+        <div class="pick-hint">листай · тап по иконке свернёт</div>
+      </div>
+    </div>
+
+    <div class="pick-block ${remindOpen ? "open" : ""}" data-pick="remind">
+      <button class="pick-head" type="button" data-toggle-pick="remind">
+        <span class="lab">Пуш</span>
+        <span class="val" id="val-remind">${escapeHtml(fmtRemind(item))}</span>
+        <span class="pick-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9a6 6 0 1 1 12 0c0 4 2 5 2 5H4s2-1 2-5"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+        </span>
+      </button>
+      <div class="pick-body">
+        <div class="wheels">
+          ${wheelHtml(remindLabels(), REMIND_OFFSETS[remindIdx].label, "remind")}
+        </div>
+        <div class="pick-hint">листай · тап по иконке свернёт</div>
+      </div>
+    </div>
+
+    <div class="field"><label>Место</label><input id="f-place" value="${escapeHtml(item.place || "")}" placeholder="не обязательно" /></div>
+    <div class="actions-col">
+      <button class="btn block" id="save-detail">Сохранить</button>
+      <button class="btn ghost block" id="detail-send">Отправить людям</button>
+      <button class="btn ghost block" id="detail-alarm">${item.alarm ? "Будильник включён" : "Поставить будильник"}</button>
+      <button class="btn danger block" id="detail-cancel">Отменить запись</button>
+    </div>
+  `;
+
+  requestAnimationFrame(() => {
+    body.querySelectorAll(".wheel").forEach(w => {
+      const idx = Number(w.dataset.index || 0);
+      w.scrollTop = idx * 36;
+      w.addEventListener("scroll", () => onWheelScroll(w), { passive: true });
+    });
+  });
+}
+
+function onWheelScroll(wheel) {
+  const itemsEls = [...wheel.querySelectorAll(".wheel-item")];
+  if (!itemsEls.length) return;
+  const idx = Math.min(itemsEls.length - 1, Math.max(0, Math.round(wheel.scrollTop / 36)));
+  itemsEls.forEach((el, i) => el.classList.toggle("on", i === idx));
+  wheel.dataset.index = String(idx);
+  applyWheelToItem(wheel.dataset.wheel, idx);
+  refreshPickLabels();
+}
+
+function applyWheelToItem(key, idx) {
+  const item = items.find(i => i.id === activeItemId);
+  if (!item) return;
+  if (key === "day") item.day = idx + 1;
+  if (key === "month") item.month = idx;
+  if (key === "hour") item.hour = idx;
+  if (key === "min") item.min = MINS[idx];
+  if (key === "remind") item.remind = REMIND_OFFSETS[idx].v;
+  item.noTime = false;
+}
+
+function refreshPickLabels() {
+  const item = items.find(i => i.id === activeItemId);
+  if (!item) return;
+  const d = document.getElementById("val-date");
+  const t = document.getElementById("val-time");
+  const r = document.getElementById("val-remind");
+  if (d) d.textContent = `${item.day} ${MONTHS[item.month]}`;
+  if (t) t.textContent = `${String(item.hour).padStart(2,"0")}:${item.min}`;
+  if (r) r.textContent = fmtRemind(item);
+}
+
+function renderPeople() {
+  const box = document.getElementById("people-list");
+  let list = people;
+  if (activePreset === "work") list = people.filter(p => p.tag === "работа");
+  if (activePreset === "home") list = people.filter(p => p.tag === "дом");
+  box.innerHTML = list.map(p => `
+    <button class="person ${selectedPeople.has(p.id) ? "on" : ""}" data-person="${p.id}">
+      <div class="check">${selectedPeople.has(p.id) ? "✓" : ""}</div>
+      <div>
+        <div style="font-size:14px;font-weight:650">${escapeHtml(p.name)}</div>
+        <div class="meta">${escapeHtml(p.tag)}</div>
+      </div>
+    </button>
+  `).join("");
+}
+
+function handleCommand(text) {
+  const t = text.trim();
+  if (!t) return;
+  appendMe(t);
+  const low = t.toLowerCase();
+
+  if (low.includes("отмен")) {
+    const meeting = items.find(i => i.type === "meeting" && !i._cancelled && (low.includes("таган") || true));
+    if (meeting && (low.includes("таган") || low.includes("встреч"))) {
+      const target = low.includes("таган")
+        ? items.find(i => i.title.toLowerCase().includes("таган") && !i._cancelled)
+        : items.find(i => i.type === "meeting" && !i._cancelled);
+      if (target) {
+        target._cancelled = true;
+        appendAiText(`<strong>Отменила</strong><div class="ai-lines"><div>${escapeHtml(target.title)}</div><div>${escapeHtml(fmtWhen(target))}</div></div><div class="ai-bell">Уведомления сняты</div>`);
+        toast("Отменено");
+        return;
+      }
+    }
+    appendAiText(`<strong>Уточни</strong><div class="ai-lines"><div>Какую запись отменить?</div></div>
+      <div class="chip-row">
+        ${items.filter(i => !i._cancelled && i.type !== "bday").slice(0,3).map(i =>
+          `<button class="chip danger" data-action="cancel" data-id="${i.id}">${escapeHtml(i.title)}</button>`
+        ).join("")}
+      </div>`);
+    return;
+  }
+
+  if (low.includes("перенес") || low.includes("на 12") || low.includes("на 13")) {
+    const target = items.find(i => i.title.toLowerCase().includes("таган") && !i._cancelled) || items.find(i => i.type === "meeting" && !i._cancelled);
+    if (target) {
+      target.hour = low.includes("13") ? 13 : 12;
+      target.min = "00";
+      target.remind = 15;
+      appendAiCard(target);
+      toast("Перенесено");
+      return;
+    }
+  }
+
+  if (low.includes("рожден") || low.includes("др ")) {
+    const nb = { id: Date.now(), type: "bday", title: "Новое ДР", day: 12, month: 2, hour: 9, min: "00", remind: 1440, place: "", shelf: ["bday"], alarm: false };
+    items.push(nb);
+    appendAiText(`<strong>В дни рождения</strong><div class="ai-lines"><div>${escapeHtml(t)}</div></div><div class="ai-bell">Напомню заранее</div>
+      <div class="chip-row"><button class="chip" data-action="edit" data-id="${nb.id}">Изменить</button></div>`);
+    return;
+  }
+
+  const isMeet = low.includes("встреч") || low.includes("созвон");
+  const hourMatch = low.match(/\b([01]?\d|2[0-3])\b/);
+  const created = {
+    id: Date.now(),
+    type: isMeet ? "meeting" : "task",
+    title: t.length > 42 ? t.slice(0, 42) + "…" : t,
+    day: low.includes("завтра") ? 3 : 2,
+    month: 7,
+    hour: hourMatch ? Number(hourMatch[1]) : 10,
+    min: "00",
+    remind: 15,
+    place: low.includes("таган") ? "Таганка" : "",
+    shelf: ["today", isMeet ? "meetings" : "tasks"],
+    alarm: false,
+  };
+  items.unshift(created);
+  appendAiCard(created);
+  toast("Записала");
+}
+
+document.body.addEventListener("click", (e) => {
+  if (e.target.closest("#widget-shortcut")) {
+    openShelf(SHORTCUTS[widgetShortcut].shelf);
+    return;
+  }
+
+  const shortcut = e.target.closest("[data-shortcut]");
+  if (shortcut) {
+    widgetShortcut = shortcut.dataset.shortcut;
+    syncWidgetShortcut();
+    toast("Виджет · " + SHORTCUTS[widgetShortcut].label);
+    return;
+  }
+
+  const goBtn = e.target.closest("[data-go]");
+  if (goBtn) {
+    go(goBtn.dataset.go);
+    return;
+  }
+
+  const tab = e.target.closest("[data-shelf]");
+  if (tab) {
+    activeShelf = tab.dataset.shelf;
+    document.querySelectorAll("#shelf-tabs .tab").forEach(t => t.classList.toggle("on", t === tab));
+    renderShelf();
+    return;
+  }
+
+  const open = e.target.closest("[data-open]");
+  if (open) {
+    activeItemId = Number(open.dataset.open);
+    go("detail");
+    return;
+  }
+
+  const action = e.target.closest("[data-action]");
+  if (action) {
+    const id = Number(action.dataset.id);
+    activeItemId = id;
+    const item = items.find(i => i.id === id);
+    if (action.dataset.action === "edit") go("detail");
+    if (action.dataset.action === "send") go("send");
+    if (action.dataset.action === "alarm") {
+      if (item) item.alarm = true;
+      toast("Будильник на время события");
+    }
+    if (action.dataset.action === "cancel") {
+      if (item) item._cancelled = true;
+      appendAiText(`<strong>Отменила</strong><div class="ai-lines"><div>${escapeHtml(item.title)}</div></div><div class="ai-bell">Уведомления сняты</div>`);
+      toast("Отменено");
+      if (current === "shelves") renderShelf();
+    }
+    return;
+  }
+
+  const person = e.target.closest("[data-person]");
+  if (person) {
+    const id = person.dataset.person;
+    if (selectedPeople.has(id)) selectedPeople.delete(id);
+    else selectedPeople.add(id);
+    renderPeople();
+    return;
+  }
+
+  const preset = e.target.closest("[data-preset]");
+  if (preset) {
+    activePreset = preset.dataset.preset;
+    document.querySelectorAll(".preset").forEach(p => p.classList.toggle("on", p === preset));
+    if (activePreset === "work") selectedPeople = new Set(people.filter(p => p.tag === "работа").map(p => p.id));
+    if (activePreset === "home") selectedPeople = new Set(people.filter(p => p.tag === "дом").map(p => p.id));
+    renderPeople();
+    return;
+  }
+
+  const tog = e.target.closest("[data-toggle]");
+  if (tog) {
+    const el = tog.querySelector(".toggle");
+    if (el) el.classList.toggle("on");
+    return;
+  }
+});
+
+document.getElementById("finish-record").addEventListener("click", () => {
+  go("chat");
+  if (!chatLog.dataset.ready) {
+    seedChat();
+    chatLog.dataset.ready = "1";
+  } else {
+    appendMe("встреча завтра в 10 на Таганке");
+    appendAiCard(items[0]);
+  }
+  toast("Разобрала голос");
+});
+
+document.getElementById("chat-send").addEventListener("click", () => {
+  const input = document.getElementById("chat-input");
+  handleCommand(input.value);
+  input.value = "";
+  input.focus();
+});
+
+document.getElementById("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    document.getElementById("chat-send").click();
+  }
+});
+
+document.getElementById("shelf-list").addEventListener("click", () => {});
+
+document.getElementById("detail-body").addEventListener("click", (e) => {
+  const pickToggle = e.target.closest("[data-toggle-pick]");
+  if (pickToggle) {
+    const key = pickToggle.dataset.togglePick;
+    openPicker = openPicker === key ? null : key;
+    renderDetail();
+    return;
+  }
+
+  if (e.target.id === "save-detail") {
+    const item = items.find(i => i.id === activeItemId);
+    if (item) {
+      item.title = document.getElementById("f-title").value;
+      item.place = document.getElementById("f-place").value;
+    }
+    openPicker = null;
+    toast("Сохранено");
+    go("shelves");
+  }
+  if (e.target.id === "detail-cancel") {
+    const item = items.find(i => i.id === activeItemId);
+    if (item) item._cancelled = true;
+    toast("Отменено");
+    go("shelves");
+  }
+  if (e.target.id === "detail-alarm") {
+    const item = items.find(i => i.id === activeItemId);
+    if (item) item.alarm = !item.alarm;
+    toast(item.alarm ? "Будильник включён" : "Будильник выключен");
+    renderDetail();
+  }
+  if (e.target.id === "detail-send") {
+    go("send");
+  }
+});
+
+document.getElementById("send-confirm").addEventListener("click", () => {
+  const n = selectedPeople.size;
+  toast(n ? `Отправлено · ${n}` : "Выберите людей");
+  if (n) go("detail");
+});
+
+document.getElementById("go-people").addEventListener("click", () => go("people-settings"));
+
+syncWidgetShortcut();
+renderShelf();
+</script>
+</body>
+</html>

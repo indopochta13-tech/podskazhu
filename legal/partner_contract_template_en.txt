@@ -1,0 +1,79 @@
+# GRATUITOUS PARTNERSHIP AND MUTUAL PROMOTION AGREEMENT
+# FOR INFORMATION PRODUCTS
+(electronic document form)
+
+Moscow, Russia                                              August 30, 2026
+
+Citizen of the Russian Federation [PARTNER_NAME], applying the special tax regime
+"Professional Income Tax" (self-employed individual), TIN [PARTNER_INN], hereinafter
+referred to as the "Partner", on the one part,
+
+and Citizen of the Russian Federation [DEVELOPER_NAME], applying the special tax regime
+"Professional Income Tax" (self-employed individual), TIN [DEVELOPER_INN], hereinafter
+referred to as the "Developer", on the other part,
+
+collectively referred to as the "Parties", have entered into this Agreement as follows:
+
+## 1. SUBJECT OF THE AGREEMENT
+1.1. The Parties undertake to carry out gratuitous partnership cooperation aimed at the
+informational and technological development of the Parties' personal projects in the
+fields of psychology, self-reflection, and soft-skills development.
+1.2. Under this Agreement, the Partner shall, on a gratuitous basis, place a stationary
+information button (hyperlink) inside its mobile application/service "[PARTNER_APP]"
+leading to the informational page of the Developer's software "[DEVELOPER_APP]" at:
+[DEVELOPER_APP_URL].
+1.2.1. The software "[DEVELOPER_APP]" ([DEVELOPER_APP_DESC]) is published on the Developer's
+informational website at [DEVELOPER_APP_URL] (download page: [DEVELOPER_APP_DOWNLOAD];
+privacy policy: [DEVELOPER_APP_PRIVACY]). The hyperlink is reference/informational and
+informs users about the Developer's product.
+1.2.2. After publication of "[DEVELOPER_APP]" in the official RuStore marketplace, the Developer
+notifies the Partner by email listed in Section 5. Within 14 calendar days of such notice,
+the Partner updates the hyperlink to the official RuStore app page (or [DEVELOPER_APP_URL]
+if RuStore uses the same domain) without additional remuneration or a supplementary agreement.
+1.3. The Developer shall, on a gratuitous basis, provide full technical support for its
+software "[DEVELOPER_APP]", ensure uninterrupted operation of AI models used (if applicable),
+and advise users who come from the Partner's service.
+1.4. This Agreement is gratuitous. The Parties do not pay each other remuneration. Each
+Party bears its own expenses related to performance (including the Developer's costs for
+third-party compute and neural network APIs).
+
+## 2. LEGAL STATUS OF PRODUCTS AND PRICING
+2.1. The software "[DEVELOPER_APP]" is the result of the Developer's personal intellectual
+labor. All exclusive rights to code, structure, and algorithms belong to the Developer.
+2.2. The Developer independently monetizes its software (including subscriptions and other
+paid features through its own billing). All user payments go directly to the Developer's
+account and acquiring. The Partner is not involved in payment processing and does not claim
+agency commissions.
+2.3. The Parties act as independent business subjects. The informational link integration
+does not create a joint legal entity, simple partnership, or agency relationship requiring
+licensing.
+
+## 3. COMPLIANCE WITH FAS AND ROSKOMNADZOR REQUIREMENTS
+3.1. Placement of the link to the Developer's software in the Partner's interface is purely
+reference/informational, does not unduly promote the Developer's product, and per FAS RF
+clarifications does not require mandatory advertising labeling.
+3.2. The Parties independently bear responsibility before Roskomnadzor for personal data
+law compliance (Federal Law No. 152-FZ). The Partner is not responsible for user data
+processing inside the Developer's software when such software operates autonomously and
+the Developer acts as the operator.
+
+## 4. EXECUTION AND TERM
+4.1. This Agreement is executed electronically per Civil Code of the RF Art. 434. The
+electronic Agreement is deemed signed with Simple Electronic Signature (SES/PЭP) by both
+Parties upon system recording of the "Sign" button click with IP addresses and timestamps.
+4.2. The Agreement enters into force upon bilateral electronic signing and remains in
+effect indefinitely until one Party terminates unilaterally with 14 calendar days' notice.
+
+## 5. ADDRESSES, DETAILS, AND IDENTIFIERS
+
+**PARTNER:**
+Full name: [PARTNER_NAME]
+Status: Self-employed (NPD)
+TIN: [PARTNER_INN]
+E-signature: Simple ES (verified by account ID [PARTNER_ID])
+
+**DEVELOPER:**
+Full name: [DEVELOPER_NAME]
+Status: Self-employed (NPD)
+TIN: [DEVELOPER_INN]
+E-signature: Simple ES (verified by account ID [DEVELOPER_ID])

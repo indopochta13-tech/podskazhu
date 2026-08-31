@@ -1,0 +1,33 @@
+[Unit]
+Description=SoulVoice — голос в задачи
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vcapp
+Group=vcapp
+WorkingDirectory=/opt/voicecapture
+Environment=NODE_ENV=production
+Environment=VC_PORT=8790
+Environment=VC_HOST=127.0.0.1
+Environment=VC_DATA_DIR=/var/lib/voicecapture
+Environment=VC_CONTACT=mailto:admin@soulvoicee.ru
+Environment=VC_ORIGIN=https://soulvoicee.ru
+EnvironmentFile=-/etc/voicecapture.env
+ExecStart=/usr/bin/node /opt/voicecapture/server.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voicecapture
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/voicecapture
+MemoryMax=400M
+
+[Install]
+WantedBy=multi-user.target

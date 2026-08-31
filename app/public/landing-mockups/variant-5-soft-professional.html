@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Макет 05 · Soft Professional</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:linear-gradient(180deg,#e8f4fc 0%,#f5f9fc 40%,#fff 100%); color:#1a3a52; min-height:100vh; }
+  .mock { background:#1e5a8a; color:#fff; text-align:center; padding:8px; font-size:12px; font-weight:600; }
+  .wrap { max-width:1040px; margin:0 auto; padding:32px 24px 64px; }
+  nav { display:flex; justify-content:space-between; align-items:center; background:#fff; padding:16px 24px; border-radius:16px; box-shadow:0 4px 24px rgba(30,90,138,.08); margin-bottom:32px; }
+  nav strong { color:#1e5a8a; }
+  nav a { color:#1e5a8a; text-decoration:none; font-weight:500; }
+  .hero { display:grid; grid-template-columns:240px 1fr; gap:40px; background:#fff; border-radius:24px; padding:40px; box-shadow:0 8px 40px rgba(30,90,138,.1); margin-bottom:24px; align-items:center; }
+  @media(max-width:768px){ .hero{ grid-template-columns:1fr; text-align:center; } }
+  .photo { width:240px; height:280px; border-radius:20px; overflow:hidden; box-shadow:0 8px 24px rgba(30,90,138,.15); margin:0 auto; }
+  .photo img { width:100%; height:115%; object-fit:cover; object-position:center 8%; margin-top:-5%; }
+  h1 { font-size:2.2rem; font-weight:700; color:#1e5a8a; margin-bottom:12px; line-height:1.2; }
+  .badge { display:inline-block; background:#e8f4fc; color:#1e5a8a; padding:6px 14px; border-radius:999px; font-size:.85rem; font-weight:500; margin-bottom:16px; }
+  .lead { color:#5a7a92; font-size:1.05rem; margin-bottom:24px; line-height:1.6; }
+  .btn { display:inline-block; background:#1e5a8a; color:#fff; padding:14px 28px; border-radius:12px; text-decoration:none; font-weight:600; box-shadow:0 4px 16px rgba(30,90,138,.25); }
+  .btn:hover { background:#164870; }
+  .section { background:#fff; border-radius:20px; padding:32px; margin-bottom:20px; box-shadow:0 4px 20px rgba(30,90,138,.06); }
+  h2 { font-size:1.25rem; color:#1e5a8a; margin-bottom:20px; }
+  .svc-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; }
+  .svc { background:#f0f7fc; border-radius:14px; padding:20px; }
+  .svc h3 { font-size:.95rem; color:#1e5a8a; margin-bottom:6px; }
+  .svc p { font-size:.85rem; color:#5a7a92; }
+  .proj { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid #e8f0f6; flex-wrap:wrap; gap:8px; }
+  .proj:last-child { border:none; }
+  .proj a { color:#2d7ab8; font-size:.85rem; text-decoration:none; }
+  .timeline { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .tl { background:#f0f7fc; border-radius:12px; padding:16px; text-align:center; }
+  .tl b { display:block; font-size:1.3rem; color:#1e5a8a; }
+  .tl span { font-size:.8rem; color:#5a7a92; }
+  footer { text-align:center; padding:24px; font-size:.85rem; color:#5a7a92; }
+  footer a { color:#1e5a8a; }
+</style>
+</head>
+<body>
+<div class="mock">МАКЕТ 05 · Soft Professional — рекомендуем для визы</div>
+<div class="wrap">
+  <nav><strong>Volkov Valerii</strong><a href="mailto:indopochte13@gmail.com">indopochte13@gmail.com</a></nav>
+  <section class="hero">
+    <div class="photo"><img src="photo.jpg" alt="Volkov Valerii"></div>
+    <div>
+      <span class="badge">Software Engineer · Self-employed</span>
+      <h1>Разрабатываю приложения, сайты, ботов и автоматизацию</h1>
+      <p class="lead">Volkov Valerii — независимый разработчик из России. Мобильные приложения, веб-сайты, Telegram-боты, backend, DevOps. Работаю с клиентами напрямую.</p>
+      <a class="btn" href="mailto:indopochte13@gmail.com">Связаться по email</a>
+    </div>
+  </section>
+  <div class="section">
+    <h2>Услуги</h2>
+    <div class="svc-grid">
+      <div class="svc"><h3>📱 Мобильные приложения</h3><p>Android, Capacitor, RuStore</p></div>
+      <div class="svc"><h3>🌐 Сайты</h3><p>Лендинги, PWA, админ-панели</p></div>
+      <div class="svc"><h3>🤖 Боты</h3><p>Telegram, VK, Mini Apps</p></div>
+      <div class="svc"><h3>⚙️ Автоматизация</h3><p>Любые скрипты и интеграции</p></div>
+    </div>
+  </div>
+  <div class="section">
+    <h2>Примеры работ</h2>
+    <div class="proj"><span><strong>Психея</strong> — Telegram Mini App</span><a href="#">tg.psycheecosystem.com</a></div>
+    <div class="proj"><span><strong>SoulVoice</strong> — голос → задачи</span><a href="#">Android APK</a></div>
+    <div class="proj"><span><strong>Market Pulse</strong></span><a href="#">pulse dashboard</a></div>
+    <div class="proj"><span><strong>VPN Bot Pulse209</strong></span><a href="#">@Pulse209VPN_bot</a></div>
+  </div>
+  <div class="section">
+    <h2>Примерные сроки</h2>
+    <div class="timeline">
+      <div class="tl"><b>3–7</b><span>дней · лендинг</span></div>
+      <div class="tl"><b>1–2</b><span>нед · бот</span></div>
+      <div class="tl"><b>2–4</b><span>нед · Mini App</span></div>
+      <div class="tl"><b>3–6</b><span>нед · mobile</span></div>
+      <div class="tl"><b>2–7</b><span>дней · автоматизация</span></div>
+    </div>
+  </div>
+  <footer>
+    <a href="#">Политика конфиденциальности</a> · <a href="#">Согласие на обработку данных</a><br><br>
+    github.com/indopochta13-tech · indopochte13@gmail.com
+  </footer>
+</div>
+</body>
+</html>

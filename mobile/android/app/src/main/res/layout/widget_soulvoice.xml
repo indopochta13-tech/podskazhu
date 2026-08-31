@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ListView — единственный способ листать пальцем в App Widget.
+  Фон карточек: ImageView + Bitmap из WidgetLook (полупрозрачный surface, скругление).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="0dp">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ImageView
+            android:id="@+id/widget_top_card_bg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitXY"
+            android:src="@drawable/widget_bg" />
+
+        <LinearLayout
+            android:id="@+id/widget_top_card"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingLeft="6dp"
+            android:paddingTop="8dp"
+            android:paddingRight="6dp"
+            android:paddingBottom="6dp">
+
+            <LinearLayout
+                android:id="@+id/widget_tabs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingBottom="6dp">
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="32dp"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1">
+
+                    <ImageView
+                        android:id="@+id/widget_tab_0_bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="@null"
+                        android:scaleType="fitXY"
+                        android:src="@drawable/widget_day_chip_on" />
+
+                    <TextView
+                        android:id="@+id/widget_tab_0"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:paddingLeft="6dp"
+                        android:paddingRight="6dp"
+                        android:text="10 августа"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="32dp"
+                    android:layout_weight="1">
+
+                    <ImageView
+                        android:id="@+id/widget_tab_1_bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="@null"
+                        android:scaleType="fitXY"
+                        android:src="@drawable/widget_day_chip" />
+
+                    <TextView
+                        android:id="@+id/widget_tab_1"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:paddingLeft="6dp"
+                        android:paddingRight="6dp"
+                        android:text="11 августа"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/widget_month_label"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_day_label"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_tab_2"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/widget_tab_2_bg"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:contentDescription="@null"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_tab_3"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/widget_tab_3_bg"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:contentDescription="@null"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:minHeight="72dp">
+
+                <ListView
+                    android:id="@+id/widget_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:divider="@null"
+                    android:dividerHeight="0dp"
+                    android:listSelector="@android:color/transparent"
+                    android:scrollbars="vertical" />
+
+                <TextView
+                    android:id="@+id/widget_empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:minHeight="48dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp"
+                    android:text="Скажите, что напомнить"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:minHeight="88dp">
+
+        <ImageView
+            android:id="@+id/widget_bottom_bar_bg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitXY"
+            android:src="@drawable/widget_bg" />
+
+        <LinearLayout
+            android:id="@+id/widget_bottom_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingLeft="10dp"
+            android:paddingTop="10dp"
+            android:paddingRight="10dp"
+            android:paddingBottom="10dp">
+
+            <LinearLayout
+                android:id="@+id/widget_left"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingLeft="3dp"
+                android:paddingRight="3dp">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp">
+
+                    <ImageView
+                        android:id="@+id/widget_left_btn_bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="@null"
+                        android:scaleType="fitXY"
+                        android:src="@drawable/widget_btn" />
+
+                    <ImageView
+                        android:id="@+id/widget_left_icon"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="Левая полка"
+                        android:paddingTop="10dp"
+                        android:paddingBottom="10dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_widget_repeat" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/widget_left_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Ежедневные"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/widget_record"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.15"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingLeft="3dp"
+                android:paddingRight="3dp">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp">
+
+                    <ImageView
+                        android:id="@+id/widget_record_btn_bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="@null"
+                        android:scaleType="fitXY"
+                        android:src="@drawable/widget_btn_record" />
+
+                    <ImageView
+                        android:id="@+id/widget_record_icon"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="Запись"
+                        android:paddingTop="10dp"
+                        android:paddingBottom="10dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_widget_mic" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/widget_record_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="Запись"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/widget_right"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingLeft="3dp"
+                android:paddingRight="3dp">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp">
+
+                    <ImageView
+                        android:id="@+id/widget_right_btn_bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="@null"
+                        android:scaleType="fitXY"
+                        android:src="@drawable/widget_btn" />
+
+                    <ImageView
+                        android:id="@+id/widget_right_icon"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="Правая полка"
+                        android:paddingTop="10dp"
+                        android:paddingBottom="10dp"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ic_widget_calendar" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/widget_right_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Календарь"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>

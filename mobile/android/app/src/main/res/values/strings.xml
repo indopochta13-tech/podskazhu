@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SoulVoice</string>
+    <string name="title_activity_main">SoulVoice</string>
+    <string name="package_name">ru.soulvoice.app</string>
+    <string name="custom_url_scheme">soulvoice</string>
+    <string name="widget_description">Ближайшие записи листаются пальцем, запись голосом — одной кнопкой</string>
+    <string name="record_ok">Запомнил</string>
+    <string name="record_ok_with_text">Запомнил: %1$s</string>
+</resources>

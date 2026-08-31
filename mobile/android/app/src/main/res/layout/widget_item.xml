@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="top"
+    android:orientation="horizontal"
+    android:paddingTop="7dp"
+    android:paddingBottom="7dp">
+
+    <TextView
+        android:id="@+id/widget_item_time"
+        android:layout_width="42dp"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingRight="4dp"
+        android:singleLine="true"
+        android:maxLines="1"
+        android:ellipsize="none"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingRight="4dp">
+
+        <TextView
+            android:id="@+id/widget_item_lab"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAllCaps="true"
+            android:textSize="11sp"
+            android:letterSpacing="0.04" />
+
+        <TextView
+            android:id="@+id/widget_item_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_item_meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/widget_item_phone"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:contentDescription="Позвонить"
+        android:padding="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_widget_phone" />
+
+    <ImageView
+        android:id="@+id/widget_item_alarm"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:contentDescription="Будильник"
+        android:padding="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_widget_alarm" />
+
+    <ImageView
+        android:id="@+id/widget_item_edit"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:contentDescription="Редактировать"
+        android:padding="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_widget_edit" />
+
+    <ImageView
+        android:id="@+id/widget_item_trash"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:contentDescription="Удалить"
+        android:padding="5dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_widget_trash" />
+</LinearLayout>

@@ -1,0 +1,2434 @@
+import { zonedParts, zonedToUtc, addDays, addMonths, weekdayOf, compareDates } from "./time.js";
+
+/**
+ * NLU SoulVoice — как у голосовых ассистентов, но своими правилами (без нейросети):
+ *
+ *  1) intent  — действие: create | move | cancel | empty
+ *  2) slots   — поля формы: title, date, time, place, kind, target, shift, timer…
+ *  3) apply   — сервер создаёт запись или правит найденную по target/query/place
+ *
+ * Слоты всегда лежат в result.slots — так проще расширять и тестировать.
+ */
+
+// В JS \b и \w работают только с ASCII, поэтому границы слов задаём вручную.
+// Все встроенные полки в одном месте: список нужен и разбору речи, и серверу, и настройкам.
+export const BUILTIN_SHELF_IDS = [
+  "today", "meetings", "tasks", "buy", "notes", "bday", "sport", "care", "bills", "meters", "health", "alarms",
+];
+
+// Закладки без собственных записей: их можно скрыть и переставить, но запись туда не кладут.
+export const TAB_ONLY_SHELF_IDS = ["templates"];
+
+const L = "а-яa-z0-9";
+const NB = `(?![${L}])`;
+const NBL = `(?<![${L}])`;
+const W = `[${L}]`;
+
+const NUM_WORDS = {
+  "ноль": 0, "один": 1, "одну": 1, "одна": 1, "два": 2, "две": 2, "три": 3,
+  "четыре": 4, "пять": 5, "шесть": 6, "семь": 7, "восемь": 8, "девять": 9,
+  "десять": 10, "одиннадцать": 11, "двенадцать": 12, "тринадцать": 13,
+  "четырнадцать": 14, "пятнадцать": 15, "шестнадцать": 16, "семнадцать": 17,
+  "восемнадцать": 18, "девятнадцать": 19, "двадцать": 20,
+  // Родительный падеж — нужен для «без пятнадцати восемь» и «через двух часов».
+  "одной": 1, "двух": 2, "трех": 3, "четырех": 4, "пяти": 5, "шести": 6, "семи": 7,
+  "восьми": 8, "девяти": 9, "десяти": 10, "одиннадцати": 11, "двенадцати": 12,
+  "тринадцати": 13, "четырнадцати": 14, "пятнадцати": 15, "шестнадцати": 16,
+  "семнадцати": 17, "восемнадцати": 18, "девятнадцати": 19, "двадцати": 20,
+  // Десятки нужны для минут словами («в шесть тридцать») и для «через сорок минут».
+  "тридцать": 30, "сорок": 40, "пятьдесят": 50, "тридцати": 30, "сорока": 40, "пятидесяти": 50,
+  // Частые опечатки и огрехи распознавания речи.
+  "одинадцать": 11, "двинадцать": 12, "дясять": 10, "десить": 10, "шесь": 6, "сем": 7,
+};
+
+// Минуты словами: «в шесть тридцать», «в двенадцать ноль ноль», «в семь сорок пять».
+const MINUTE_WORD_PATTERN = "ноль\\s+ноль|нуль\\s+нуль|(?:двадцать|тридцать|сорок|пятьдесят)(?:\\s+пять)?|пятнадцать|десять|пять|ноль";
+
+function minuteWords(raw) {
+  const parts = normalize(String(raw || "")).trim().split(/\s+/);
+  if (parts.length === 2 && (parts[0] === "ноль" || parts[0] === "нуль")) return 0;
+  const tens = wordNumber(parts[0]);
+  if (tens == null) return null;
+  if (parts.length === 1) return tens <= 59 ? tens : null;
+  const ones = wordNumber(parts[1]);
+  if (ones == null) return null;
+  const value = tens + ones;
+  return value <= 59 ? value : null;
+}
+
+// Даты словами: «первого сентября», «двадцать третьего числа», «тридцать первого декабря».
+const ORDINAL_DAY_UNITS = {
+  "первого": 1, "второго": 2, "третьего": 3, "четвертого": 4, "пятого": 5, "шестого": 6,
+  "седьмого": 7, "восьмого": 8, "девятого": 9, "десятого": 10, "одиннадцатого": 11,
+  "двенадцатого": 12, "тринадцатого": 13, "четырнадцатого": 14, "пятнадцатого": 15,
+  "шестнадцатого": 16, "семнадцатого": 17, "восемнадцатого": 18, "девятнадцатого": 19,
+  "двадцатого": 20, "тридцатого": 30,
+};
+const ORDINAL_DAY_PATTERN = `(?:(двадцать|тридцать)\\s+)?(${Object.keys(ORDINAL_DAY_UNITS).join("|")})`;
+
+function ordinalDay(tens, word) {
+  const base = ORDINAL_DAY_UNITS[word];
+  if (base == null) return null;
+  if (!tens) return base;
+  if (base > 9) return null;
+  const value = (tens === "двадцать" ? 20 : 30) + base;
+  return value <= 31 ? value : null;
+}
+
+const MONTH_PATTERNS = [
+  "янва(?:ря|рь)|янв",
+  "феврал(?:я|ь)|фев",
+  "март(?:а)?|мар",
+  "апрел(?:я|ь)|апр",
+  "ма(?:я|й)",
+  "июн(?:я|ь)",
+  "июл(?:я|ь)",
+  "август(?:а)?|авг",
+  "сентябр(?:я|ь)|сен",
+  "октябр(?:я|ь)|окт",
+  "ноябр(?:я|ь)|ноя",
+  "декабр(?:я|ь)|дек",
+];
+
+// Падежи нужны и для «в пятницу», и для срока «до пятницы» / «к понедельнику».
+const WEEKDAYS = [
+  { pattern: "понедельник(?:у|а)?", idx: 1 },
+  { pattern: "вторник(?:у|а)?", idx: 2 },
+  { pattern: "серед[уаые]|сред[уаые]", idx: 3 },
+  { pattern: "четверг(?:у|а)?", idx: 4 },
+  { pattern: "пятниц[уаые]", idx: 5 },
+  { pattern: "суббот[уаые]|субот[уаые]", idx: 6 },
+  { pattern: "воскресень[еяю]", idx: 0 },
+];
+
+const DAY_PARTS = [
+  { pattern: "(?:с\\s+|со\\s+)?утр(?:ом|а|ечком)|к\\s+утру", hour: 9 },
+  { pattern: "в\\s+обед|обед(?:ом)?|к\\s+обеду", hour: 13 },
+  { pattern: "днем|с\\s+обеда", hour: 14 },
+  { pattern: "вечер(?:ом|а|ком)|под\\s+вечер", hour: 19 },
+  { pattern: "ноч(?:ью|и)", hour: 22 },
+];
+
+// «вечером в 9» — уточнение стоит перед часами, а не после них.
+const DAY_PART_HINTS = [
+  { pattern: "(?:с\\s+|со\\s+)?утр(?:ом|ечком)|к\\s+утру", mod: "утра" },
+  { pattern: "днем|после\\s+обеда|с\\s+обеда|к\\s+обеду", mod: "дня" },
+  { pattern: "вечер(?:ом|ком)|под\\s+вечер", mod: "вечера" },
+  { pattern: "ноч(?:ью)", mod: "ночи" },
+];
+
+// Разговорные обороты идут раньше DAY_PARTS: «после обеда» — это не «обед».
+const VAGUE_TIMES = [
+  { pattern: "рано\\s+утром|с\\s+самого\\s+утра", hour: 7 },
+  { pattern: "до\\s+обеда|в\\s+первой\\s+половине\\s+дня", hour: 11 },
+  { pattern: "после\\s+обеда|во\\s+второй\\s+половине\\s+дня|с\\s+обеда", hour: 15 },
+  { pattern: "ближе\\s+к\\s+вечеру|к\\s+вечеру|под\\s+вечер", hour: 18 },
+  { pattern: "поздно\\s+вечером|ближе\\s+к\\s+ночи|на\\s+ночь", hour: 21 },
+];
+
+const ORDINAL_HOURS = {
+  "первого": 1, "второго": 2, "третьего": 3, "четвертого": 4, "пятого": 5, "шестого": 6,
+  "седьмого": 7, "восьмого": 8, "девятого": 9, "десятого": 10, "одиннадцатого": 11, "двенадцатого": 12,
+};
+
+const MEETING_RE = new RegExp(
+  `${NBL}(?:встреч|созвон|созвонимс|созвонит|митинг|собрани|планерк|интервью|прием|визит|конференц`
+  + `|переговоры|клиентск|zoom|зум|скайп|тимс|teams|телемост|стендап|запись\\s+к${NB}`
+  + `|у\\s+(?:врача|зубного|стоматолога|нотариуса|терапевта|педиатра|мастера|парикмахера)${NB}`
+  + `|к\\s+(?:врачу|зубному|стоматологу|нотариусу|терапевту|педиатру|мастеру|парикмахеру|бровист|космето)`
+  + `|поликлиник|больниц[ауе]${NB}|стрижк|маникюр|педикюр`
+  // Показ объекта — рабочая встреча риэлтора, а не дело по дому.
+  // «Показ квартиры в субботу в 12» должен лечь во встречи.
+  + `|показ${NB}|показ\\s+(?:квартир|объект|дом|помещен|офис)|показать\\s+(?:квартир|объект|дом))`,
+  "iu",
+);
+// «поставь будильник на 7» — человек ждёт громкий сигнал, а не тихую напоминалку.
+const ALARM_RE = new RegExp(
+  `${NBL}(?:(?:включи|заведи|поставь|поставить)\\s+)?будильник`
+  + `|${NBL}сигнал\\s+на`
+  + `|${NBL}(?:разбуд(?:и|ить|ите)|подъем|разбуди\\s+меня)`,
+  "iu",
+);
+const BIRTHDAY_RE = new RegExp(
+  `${NBL}(?:д(?:ень|ня)\\s+рождени|днюх|годовщин|др${NB}|исполняется\\s+\\d|день\\s+рожден)`,
+  "iu",
+);
+const CANCEL_RE = new RegExp(
+  `${NBL}(?:отмени(?:ть)?|отмена|удали(?:ть)?|убери(?:те)?|вычеркн(?:и|уть)|отбой|сними`
+  + `|сними\\s+с\\s+(?:списка|календаря)|убери\\s+из\\s+списка)${NB}`,
+  "iu",
+);
+// «поменяй таймер…» / «измени встречу…» / «внеси правки в заметку…» — правка, не новое дело.
+// Только повелительные / явные команды правки. Инфинитив «поменять права» — это create, не move.
+const MOVE_RE = new RegExp(
+  `${NBL}(?:`
+  + `перенес(?:и|ти)|переставь|переложи|отлож(?:и|ить)|сдвин(?:ь|уть)|передвин(?:ь|уть)`
+  + `|(?:измени(?:ть)?|поменяй|смени)(?:\\s+врем(?:я|ени))?`
+  + `|исправ(?:ь|ить)|поправ(?:ь|ить)|отредактируй(?:те)?|отредактировать`
+  + `|скорректируй(?:те)?|скорректировать|обнови`
+  + `|(?:внеси(?:те)?|внести)\\s+(?:правк[уи]|изменен(?:ия|ие)|корректив[уы])`
+  + `|(?:добавь(?:те)?|поставь|поставить)\\s+(?:время|срок)`
+  + `)`,
+  "iu",
+);
+const RELATIVE_MOVE_RE = new RegExp(
+  `${NBL}(?:перенес(?:и|ти)|переставь|переложи|отлож(?:и|ить)|сдвин(?:ь|уть)|передвин(?:ь|уть))`,
+  "iu",
+);
+// Хвост от «внеси правки/изменения» после среза глагола — не название дела.
+const EDIT_LEFTOVER_RE = new RegExp(`${NBL}(?:правк[уи]|изменен(?:ия|ие)|корректив[уы])${NB}`, "giu");
+const NOTE_RE = new RegExp(
+  `${NBL}(?:заметк[аиуе]|иде[яюи]|мысл[ьи]`
+  + `|запиши\\s+(?:мысл|иде)|добавь\\s+(?:мысл|иде)`
+  + `|(?:в|на)\\s+заметк`
+  + `|(?:положи|кинь|сохрани|зафиксируй)\\s+(?:это\\s+)?(?:в\\s+)?заметк`
+  + `|нов(?:ую|ая)\\s+заметк`
+  + `|на\\s+будущее${NB}|чтобы\\s+не\\s+забыть`
+  + `|запомни\\s+что|запиши\\s+что)`,
+  "iu",
+);
+// Явно назвали заметку/полку — не уводить во встречу, покупку или спорт.
+const NOTE_FORCE_RE = new RegExp(
+  `${NBL}(?:заметк[аиуе]|нов(?:ую|ая)\\s+заметк`
+  + `|(?:в|на)\\s+заметк`
+  + `|(?:положи|кинь|сохрани|зафиксируй|добавь|запиши)\\s+(?:это\\s+)?(?:в\\s+)?заметк`
+  + `|запиши\\s+(?:мысл|иде)|добавь\\s+(?:мысл|иде)|запомни\\s+мысл`
+  + `|на\\s+будущее${NB}|чтобы\\s+не\\s+забыть`
+  + `|запомни\\s+что|запиши\\s+что`
+  + `|(?:^|\\s)(?:иде[яюи]|мысл[ьи])(?:\\s|$))`,
+  "iu",
+);
+// «положи в заметки …» / «в заметках …» — это полка, не адрес.
+const NOTE_SHELF_PHRASE = new RegExp(
+  `${NBL}(?:положи|кинь|сохрани|зафиксируй|добавь|запиши)?\\s*(?:это\\s+)?(?:в|на)\\s+заметк[аиуех]*`,
+  "giu",
+);
+// Покупки живут отдельно от дел: у них обычно нет часа, но забывать их нельзя.
+const BUY_RE = new RegExp(
+  `${NBL}(?:куп(?:и|ить|лю|им|ите)${NB}`
+  + `|закуп(?:и|ить|иться|аться)|прикуп(?:и|ить)|приобрест|покупк[аиуе]|список\\s+покупок`
+  + `|добав(?:ь|ить)\\s+в\\s+список|надо\\s+купить|нужно\\s+купить`
+  + `|продукт(?:ы|ов)${NB}|за\\s+продуктами${NB}`
+  + `|(?:зай(?:ти|ди)|заех(?:ать|ай)|заезжай|сход(?:ить|и)|сбега(?:ть|й)|съезд(?:ить|и))\\s+(?:${W}+\\s+)?(?:в|на)\\s+(?:магазин|аптек|рынок|супермаркет|пятерочк|перекресток|ашан|леруа|икею|икеа|вкусвилл|магнит)`
+  + `|(?:взять|возьми)\\s+(?:${W}+\\s+)?в\\s+(?:магазине|аптеке))`,
+  "iu");
+// Тренировки живут отдельно от дел: график, что качаем в этот день.
+const SPORT_RE = new RegExp(
+  `${NBL}(?:тренировк|спортзал|качалк|фитнес|кроссфит|йог[аиуе]|пробежк|разминк|заминк`
+  + `|плавани|бассейн|футбол|волейбол|баскетбол|теннис|велосипед|зарядк`
+  + `|в\\s+зал${NB}|на\\s+(?:тренировк|зал)${NB}|занятие\\s+(?:в\\s+зале|спортом)`
+  + `|кача(?:ть|ю|ем)\\s+(?:ноги|ногу|грудь|спину|руки|руку|плечи|пресс|ягодиц)`
+  + `|день\\s+(?:ног|груди|спины|рук|плеч|пресса)`
+  + `|трениру(?:ю|ем|ешь|й))`,
+  "iu");
+// Уход за лицом: дневной и вечерний протокол настраивается раз, напоминания идут каждый день.
+const CARE_RE = new RegExp(
+  `${NBL}(?:косметик|уход(?:а)?\\s+за\\s+лиц|сыворотк|ретинол|ниацинамид|тоник(?:а|ом)?${NB}`
+  + `|крем\\s+для\\s+лица|маск[аиуе]\\s+для\\s+лица|солнцезащит|\\bspf\\b`
+  + `|очищен(?:ие|ия)|пенк[аиуе]|патч(?:и|ей)|умыван`
+  + `|нанес(?:ти|у|и)\\s+(?:на\\s+лицо|крем|сыворотк|тоник|маску)`
+  + `|протокол\\s+(?:ухода|утренн|вечерн|дневн)`
+  + `|утренн\\w*\\s+(?:уход|протокол|ритуал)`
+  + `|вечерн\\w*\\s+(?:уход|протокол|ритуал)`
+  + `|дневн\\w*\\s+(?:уход|протокол|ритуал))`,
+  "iu");
+// Платежи и счётчики: у них своя полка, потому что просрочка стоит денег,
+// а напоминание нужно заранее, а не в момент срока.
+// Показания счётчиков — своя полка. Проверяется раньше платежей: слова
+// «показания» и «счётчик» есть и там, и там, а «передать показания за воду» —
+// это не оплата, а отдельное дело со своей периодичностью.
+const METERS_RE = new RegExp(
+  `${NBL}(?:показани|счетчик|счётчик|снять\\s+показан|передать\\s+показан`
+  + `|счетчик${NB}\\s*(?:вод|свет|газ|электр)|(?:вод|свет|газ|электр)${W}*\\s+счетчик)`,
+  "i",
+)
+
+const BILLS_RE = new RegExp(
+  `${NBL}(?:кварплат|квартплат|коммуналк|жкх${NB}|показани|счетчик|передать\\s+показан`
+  + `|счет\\s+за${NB}|счета\\s+за${NB}|платеж|платить\\s+за${NB}|оплат[аыу]${NB}`
+  + `|(?:оплат|заплат)(?:и|ить|а|у)?\\s+(?:${W}+\\s+)?(?:за\\s+)?(?:квартир|свет|электр|воду${NB}|газ${NB}|интернет|телефон|садик|школ|кружок|секци|подписк|аренд|ипотек|кредит|налог|штраф|страховк|детский\\s+сад)`
+  + `|ипотек|кредит${NB}|налог${NB}|штраф${NB}|осаго${NB}|каско${NB}`
+  + `|абонентск|арендн|за\\s+квартиру${NB})`,
+  "iu");
+// Здоровье: лекарства, приёмы, анализы. Отдельно от дел — тут важна регулярность.
+// Обычные глаголы действия. Отдельного слова полки в таких фразах нет
+// («позвонить маме», «забрать заказ»), но это очевидно дело, а не заметка.
+// Работает только как последняя подсказка: если сработал любой другой словарь, он главнее.
+const TASK_VERB_RE = new RegExp(
+  `${NBL}(?:`
+  + `позвон(?:и|ить|ю)|перезвон(?:и|ить)|набра(?:ть|ти)|набери`
+  + `|забра(?:ть)|забери|захват(?:и|ить)|подобра(?:ть)|прихват(?:и|ить)`
+  + `|отправ(?:ь|ить|лю)|посла(?:ть)|пошли${NB}|высла(?:ть)|вышли${NB}|скин(?:ь|уть)`
+  + `|отнес(?:ти|и)|занес(?:ти|и)|отвез(?:ти|и)|привез(?:ти|и)|верн(?:уть|и)`
+  + `|заех(?:ать|ай)|заскоч(?:и|ить)|зай(?:ти|ди)|сход(?:ить|и)|съезд(?:ить|и)`
+  + `|помы(?:ть|й)|постира(?:ть|й)|погла(?:дить|дь)|убра(?:ться|ть)|пропылесос(?:ить|ь)`
+  + `|выкин(?:уть|и)|вынес(?:ти|и)|поли(?:ть|й)|покорм(?:ить|и)|заряд(?:ить|и)`
+  + `|почин(?:ить|и)|исправ(?:ить)|собра(?:ть)|собери|разобра(?:ть)`
+  + `|распечата(?:ть|й)|напечата(?:ть|й)|продл(?:ить|и)|подпис(?:ать|аться)`
+  + `|провер(?:ить|ь)|уточн(?:ить|и)|спрос(?:ить|и)|ответ(?:ить|ь)`
+  + `|сда(?:ть|й)${NB}|получ(?:ить|и)|оформ(?:ить|и)|подтверд(?:ить|и)`
+  + `|выход(?:ить|и)${NB}|выезжа(?:ть|й)|выйти${NB}`
+  + `|поздрав(?:ить|ь)|планирова(?:ть)|помен(?:ять|яй)|заказа(?:ть)|закажи${NB}`
+  + `|запис(?:аться|ать)|брониров(?:ать)|заброниров(?:ать)|отмен(?:ить)`
+  + `)`,
+  "iu");
+
+const HEALTH_RE = new RegExp(
+  `${NBL}(?:таблетк|лекарств|антибиотик|витамин|капл(?:и|ю|ями)${NB}|укол${NB}|уколы${NB}`
+  + `|прививк|мазь${NB}|сироп|ингаля|давлени|анализ(?:ы|ов)?${NB}|температур`
+  + `|измерить\\s+давлени|померить\\s+давлени|курс\\s+лечен`
+  + `|(?:выпить|принять|попить|пить)\\s+(?:${W}+\\s+)?(?:таблетк|лекарств|витамин|капл|сироп|антибиотик))`,
+  "iu");
+
+/**
+ * Профили закладок: смысл полки + какие слоты важны.
+ * today/chat/templates — вкладки без своих записей (фильтр / UI).
+ */
+export const SHELF_PROFILES = {
+  alarms: {
+    type: "alarm",
+    label: "Будильник",
+    meaning: "Громкий сигнал в момент; не тихий пуш",
+    slots: ["title", "time", "date", "repeat"],
+    needsTime: true,
+    defaultRemind: 0,
+  },
+  meetings: {
+    type: "meeting",
+    label: "Встречи",
+    meaning: "Встреча/созвон с временем и часто местом",
+    slots: ["title", "date", "time", "place"],
+    needsTime: true,
+    defaultRemind: 15,
+  },
+  tasks: {
+    type: "task",
+    label: "Дела",
+    meaning: "Обычное дело со сроком или без",
+    slots: ["title", "date", "time", "place"],
+    needsTime: true,
+    defaultRemind: 0,
+  },
+  sport: {
+    type: "sport",
+    label: "Спорт",
+    meaning: "Тренировка/зал; сигнал в момент",
+    slots: ["title", "date", "time", "repeat"],
+    needsTime: false,
+    defaultRemind: 0,
+  },
+  care: {
+    type: "care",
+    label: "Косметика",
+    meaning: "Протокол ухода утро/вечер, обычно каждый день",
+    slots: ["title", "time", "repeat", "carePart"],
+    needsTime: false,
+    defaultRemind: 0,
+  },
+  buy: {
+    type: "buy",
+    label: "Покупки",
+    meaning: "Список покупок; срок не обязателен",
+    slots: ["title", "date"],
+    needsTime: false,
+    defaultRemind: 0,
+  },
+  bills: {
+    type: "bills",
+    label: "Платежи",
+    meaning: "Оплата/показания; лучше напомнить заранее",
+    slots: ["title", "date", "repeat"],
+    needsTime: false,
+    defaultRemind: 1440,
+  },
+  meters: {
+    type: "meters",
+    label: "Счётчики",
+    meaning: "Показания воды, света, газа; передаются раз в месяц",
+    slots: ["title", "date", "repeat"],
+    needsTime: false,
+    defaultRemind: 1440,
+  },
+  health: {
+    type: "health",
+    label: "Витамины",
+    meaning: "Лекарства, курс, анализы",
+    slots: ["title", "date", "time", "repeat", "course"],
+    needsTime: false,
+    defaultRemind: 0,
+  },
+  notes: {
+    type: "note",
+    label: "Заметки",
+    meaning: "Мысль без срока",
+    slots: ["title"],
+    needsTime: false,
+    defaultRemind: 0,
+  },
+  bday: {
+    type: "bday",
+    label: "Дни рождения",
+    meaning: "Ежегодная дата, пуш заранее",
+    slots: ["title", "date", "time"],
+    needsTime: false,
+    defaultRemind: 1440,
+  },
+};
+// «три раза в день семь дней» — это курс, а не одно дело: приёмов много и у них есть конец.
+const COURSE_PER_DAY_RE = new RegExp(`${NBL}(\\d{1,2}|${W}+)\\s*раз(?:а|ов)?\\s+в\\s+день`, "iu");
+const COURSE_DAYS_RE = new RegExp(`${NBL}(?:в\\s+течение\\s+)?(\\d{1,3}|${W}+)\\s*(дн(?:я|ей|ь)?|недел(?:ю|и|ь)|месяц(?:а|ев)?)${NB}`, "iu");
+
+const CARE_MORNING_RE = new RegExp(`${NBL}(?:утренн\\w*|утром|с\\s+утра|протокол\\s+утра|дневн\\w*\\s+протокол)`, "iu");
+const CARE_EVENING_RE = new RegExp(`${NBL}(?:вечерн\\w*|вечером|на\\s+ночь|протокол\\s+вечера)`, "iu");
+const ALREADY_CANCELLED_RE = /отмени[лн]/iu;
+
+const LEAD_WORDS = new RegExp(
+  `^(?:напомни(?:\\s+мне)?|напомнить|напоминай|напоминание|напоминалку|не\\s+забы(?:ть|л|ла)|надо(?:\\s+бы)?|нужно|давай|`
+  + `запиши(?:\\s+что)?|записать|запомни|запомнить|добавь|добавить|сохрани|сохранить|положи|положить|кинь|кинуть|зафиксируй|зафиксировать|`
+  + `запланируй|запланировать|назначь|назначить|отметь|отметить|`
+  + `нов(?:ую|ая)\\s+заметк[ауеи]|заметк[аиуе]|иде[яюи]|мысл[ьи]|`
+  + `пожалуйста|слушай|окей|ок)(?![${L}])[\\s,:;.-]*`,
+  "iu",
+);
+const LEAD_VERB_ONLY = new RegExp(
+  `^(?:установи|установить|поставь|поставить|создай|создать|заведи|завести|напомни|напомнить|напоминай|`
+  + `запланируй|назначь|отметь|запиши|записать|запомни|запомнить|добавь|добавить|сохрани|сохранить|`
+  + `положи|кинь|зафиксируй|сделай|сделать|давай|надо|нужно)$`,
+  "iu",
+);
+
+// Дела в перечислении почти всегда начинаются с глагола — по нему и делим.
+const SPLIT_VERBS = [
+  "куп(?:ить|и)", "позвон(?:ить|и)", "перезвон(?:ить|и)", "напис(?:ать)", "напиши",
+  "заех(?:ать)", "заезжай", "заказ(?:ать)", "закажи", "забра(?:ть)", "забери",
+  "оплат(?:ить|и)", "заплат(?:ить|и)", "записа(?:ться)", "запишись", "сход(?:ить|и)",
+  "съезд(?:ить)", "отправ(?:ить|ь)", "отвез(?:ти|ти)", "отвези", "помы(?:ть)", "помой",
+  "погла(?:дить)", "вынес(?:ти|ти)", "вынеси", "пол(?:ить)", "полей", "провер(?:ить|ь)",
+  "скин(?:уть|ь)", "сдела(?:ть|й)", "узна(?:ть|й)", "спрос(?:ить|и)", "взять", "возьми",
+  "продл(?:ить|и)", "постав(?:ить|ь)", "зай(?:ти|ди)", "отнес(?:ти|и)", "сда(?:ть|й)",
+  "получ(?:ить|и)", "распечата(?:ть|й)", "убра(?:ть)", "убери", "выключ(?:ить|и)",
+  "включ(?:ить|и)", "собра(?:ть)", "собери", "почин(?:ить|и)", "выгул(?:ять|яй)",
+].join("|");
+
+const SPLIT_RE = new RegExp(
+  `\\s+и\\s+(?:ещ[её]|также|потом|заодно)\\s+`
+  + `|\\s*[;\\n]+\\s*`
+  + `|\\s+а\\s+также\\s+`
+  + `|\\s*,\\s*(?:а\\s+)?(?:потом|ещ[её]|также|заодно)\\s+`
+  + `|\\s+и\\s+(?=не\\s+забы|нужно|надо|встреча|созвон|${SPLIT_VERBS})`
+  + `|\\s*,\\s*(?=(?:${SPLIT_VERBS})${NB})`
+  // «в аптеку сходить и в магазин зайти» — глагол во втором деле стоит после предмета.
+  + `|\\s+и\\s+(?=(?:в|во|на|к|за)\\s+${W}+\\s+(?:${SPLIT_VERBS})${NB})`,
+  "iu");
+
+function markRange(mask, start, end) {
+  for (let i = start; i < end && i < mask.length; i += 1) mask[i] = 1;
+}
+
+function applyMask(text, mask) {
+  let out = "";
+  for (let i = 0; i < text.length; i += 1) if (!mask[i]) out += text[i];
+  return out.replace(/\s{2,}/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
+}
+
+function normalize(text) {
+  return text.toLowerCase().replace(/ё/g, "е");
+}
+
+function wordNumber(token) {
+  const key = normalize(String(token || "")).trim();
+  return Object.prototype.hasOwnProperty.call(NUM_WORDS, key) ? NUM_WORDS[key] : null;
+}
+
+function firstMatch(low, mask, pattern) {
+  const re = new RegExp(pattern, "giu");
+  let m;
+  while ((m = re.exec(low)) !== null) {
+    if (!mask[m.index]) return m;
+  }
+  return null;
+}
+
+// Первое совпадение может оказаться нечисловым («в банк»), поэтому перебираем все.
+function eachMatch(low, mask, pattern) {
+  const re = new RegExp(pattern, "giu");
+  const out = [];
+  let m;
+  while ((m = re.exec(low)) !== null) {
+    if (!mask[m.index]) out.push(m);
+    if (re.lastIndex === m.index) re.lastIndex += 1;
+  }
+  return out;
+}
+
+function weekdayDelta(current, target, forceNext) {
+  let delta = (target - current + 7) % 7;
+  if (forceNext) delta += 7;
+  return delta;
+}
+
+// «В пять» без уточнения «утра/вечера» — это ближайшее наступающее время:
+// днём в 13:00 человек имеет в виду 17:00, а поздним вечером в 20:00 — уже 5 утра.
+// Часы 8–11 так не работают: «встреча в десять» днём — это утро следующего дня,
+// а не десять вечера. Вечерний вариант берём только если он совсем близко.
+function nearestFutureHour(hour, minute, nowParts) {
+  if (hour < 1 || hour > 11) return hour;
+  const nowMinutes = nowParts.hour * 60 + nowParts.minute;
+  const delay = value => {
+    const diff = value * 60 + minute - nowMinutes;
+    return diff > 0 ? diff : diff + 1440;
+  };
+  // 10–11 почти всегда «до обеда»: в 22:00 «на 11 часов» — это 11:00 завтра, не 23:00.
+  if (hour >= 10) return hour;
+  if (hour >= 8) {
+    const morningPassed = hour * 60 + minute <= nowMinutes;
+    return morningPassed && delay(hour + 12) <= 2 * 60 ? hour + 12 : hour;
+  }
+  return delay(hour + 12) < delay(hour) ? hour + 12 : hour;
+}
+
+function lastDayOf(year, month) {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
+
+// «В начале» — первый день отрезка, «в середине» — середина, «в конце» — последний день.
+// Шаг: 1 — месяц, 3 — квартал, 12 — год.
+function spanDay(year, month, part, step) {
+  if (part === "конц") {
+    const end = addMonths({ year, month, day: 1 }, step - 1);
+    return { year: end.year, month: end.month, day: lastDayOf(end.year, end.month) };
+  }
+  if (part === "середин") {
+    const mid = addMonths({ year, month, day: 1 }, Math.floor(step / 2));
+    return { year: mid.year, month: mid.month, day: step === 12 ? 1 : 15 };
+  }
+  return { year, month, day: 1 };
+}
+
+// «в начале следующего месяца», «в конце квартала», «в середине сентября», «в следующем году».
+function relativeSpanDate(part, next, unit, nowParts) {
+  if (/^недел/.test(unit)) {
+    const target = part === "конц" ? 5 : part === "середин" ? 3 : 1;
+    if (next) return addDays(nowParts, ((8 - nowParts.weekday) % 7 || 7) + (target - 1));
+    return addDays(nowParts, weekdayDelta(nowParts.weekday, target, false));
+  }
+
+  const named = MONTH_PATTERNS.findIndex(pattern => new RegExp(`^(?:${pattern})$`, "iu").test(unit));
+  if (named >= 0) {
+    const year = named < nowParts.month ? nowParts.year + 1 : nowParts.year;
+    return spanDay(year, named, part, 1);
+  }
+
+  const step = /^квартал/.test(unit) ? 3 : /^год/.test(unit) ? 12 : 1;
+  const startMonth = step === 3 ? Math.floor(nowParts.month / 3) * 3 : step === 12 ? 0 : nowParts.month;
+  let base = { year: nowParts.year, month: startMonth, day: 1 };
+  if (next) base = addMonths(base, step);
+  let date = spanDay(base.year, base.month, part, step);
+  // «В начале месяца», когда первое число уже прошло, — это следующий месяц, а не задним числом.
+  if (!next && compareDates(date, nowParts) <= 0) {
+    const moved = addMonths(base, step);
+    date = spanDay(moved.year, moved.month, part, step);
+  }
+  return date;
+}
+
+// Ближайшее наступление названного дня месяца: «12 марта» в апреле — это следующий год.
+function dateInMonth(day, month, nowParts) {
+  let year = nowParts.year;
+  if (month < nowParts.month || (month === nowParts.month && day < nowParts.day)) year += 1;
+  return { year, month, day };
+}
+
+// «5 числа» — ближайшее пятое: если оно уже прошло, то в следующем месяце.
+function dateOnDayNumber(day, nowParts) {
+  let year = nowParts.year;
+  let month = nowParts.month;
+  if (day < nowParts.day) {
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  }
+  return { year, month, day };
+}
+
+// Когда день назван явно («завтра в пять», «каждый день в пять»), считать от «сейчас» нельзя:
+// такие часы почти всегда про вторую половину дня.
+function resolveBareHour(hour, minute, nowParts, dayKnown, wakeUp) {
+  // Будильник — исключение: «разбуди в 6» и в обед, и вечером означает шесть утра.
+  if (wakeUp) return hour;
+  if (dayKnown) return hour >= 1 && hour <= 6 ? hour + 12 : hour;
+  return nearestFutureHour(hour, minute, nowParts);
+}
+
+// «в 8 вечера», «в 12 ночи», «в 2 часа дня» — уточнение отменяет счёт от «сейчас».
+function resolveHour(hour, minute, mod, nowParts, dayKnown, wakeUp) {
+  if (/вечера/.test(mod)) return hour <= 12 ? (hour + 12) % 24 : hour;
+  if (/дня/.test(mod)) return hour <= 5 ? hour + 12 : hour;
+  if (/ночи/.test(mod)) return hour >= 8 && hour <= 12 ? (hour + 12) % 24 : hour;
+  if (mod) return hour % 24;
+  return resolveBareHour(hour, minute, nowParts, dayKnown, wakeUp) % 24;
+}
+
+// «часов в пять», «ровно в 12», «где-то в 5» — вводное слово перед временем.
+const TIME_LEAD = `(?:(?:часов|часиков|ровно|примерно|приблизительно|аккурат|где-?то)\\s+)?`;
+const NUM_WORD_ALT = Object.keys(NUM_WORDS).join("|");
+
+const WEEKDAY_PLURAL = "понедельникам|вторникам|средам|четвергам|пятницам|субботам|воскресеньям";
+
+// «каждые две недели», «раз в 3 дня», «каждые два месяца» — повтор с шагом больше одного.
+const REPEAT_UNITS = [
+  { pattern: "дн(?:я|ей|ь)", kind: "daily" },
+  { pattern: "недел(?:и|ю|ь|е)", kind: "weekly" },
+  { pattern: "месяц(?:а|ев)?", kind: "monthly" },
+];
+const REPEAT_COUNTS = {
+  "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10,
+  "две": 2, "два": 2, "двух": 2, "три": 3, "трех": 3, "четыре": 4, "четырех": 4,
+  "пять": 5, "пяти": 5, "шесть": 6, "шести": 6, "десять": 10,
+};
+const REPEAT_EVERY_RE = new RegExp(
+  `${NBL}(?:кажд(?:ые|ых)|раз\\s+в)\\s+(${Object.keys(REPEAT_COUNTS).join("|")})\\s+(${REPEAT_UNITS.map(u => u.pattern).join("|")})${NB}`,
+  "iu");
+
+// «каждый день», «по будням», «каждый вторник» и т.п.
+const REPEAT_RULES = [
+  { pattern: `${NBL}(?:по\\s+будням|каждый\\s+будний\\s+день|по\\s+рабочим\\s+дням)${NB}`, kind: "weekdays" },
+  { pattern: `${NBL}(?:по\\s+выходным|каждые\\s+выходные)${NB}`, kind: "weekends" },
+  { pattern: `${NBL}(?:кажд(?:ый|ое|ую)\\s+(?:день|утро|вечер|ночь)|ежедневно|каждый\\s+раз\\s+в\\s+день)${NB}`, kind: "daily" },
+  { pattern: `${NBL}(?:кажд(?:ый|ую)\\s+(?:недел[юяи]|понедельник|вторник|сред[уаы]|четверг|пятниц[уаы]|суббот[уаы]|воскресень[еяю])|еженедельно|по\\s+(?:${WEEKDAY_PLURAL}))(?:\\s+и\\s+(?:по\\s+)?(?:${WEEKDAY_PLURAL}))*${NB}`, kind: "weekly" },
+  { pattern: `${NBL}(?:кажд(?:ый|ое)\\s+(?:месяц|число)|ежемесячно|раз\\s+в\\s+месяц)${NB}`, kind: "monthly" },
+];
+
+// «каждый год 9 мая» — повтора как такового нет, запись просто переезжает на следующий год.
+const YEARLY_RE = new RegExp(`${NBL}(?:кажд(?:ый|ое)\\s+год|ежегодно|раз\\s+в\\s+год)${NB}`, "iu");
+
+const REPEAT_WEEKDAY_HINT = [
+  { pattern: "понедельник", idx: 1 },
+  { pattern: "вторник", idx: 2 },
+  { pattern: "сред[уаы]|средам", idx: 3 },
+  { pattern: "четверг", idx: 4 },
+  { pattern: "пятниц[уаы]|пятницам", idx: 5 },
+  { pattern: "суббот[уаы]|субботам", idx: 6 },
+  { pattern: "воскресень[еяю]|воскресеньям", idx: 0 },
+];
+
+const REPEAT_DAY_PART = [
+  { pattern: "утр(?:о|ом|а)", hour: 9 },
+  { pattern: "вечер(?:|ом|а)", hour: 19 },
+  { pattern: "ноч(?:ь|ью|и)", hour: 22 },
+];
+
+// opts.modHint — половина суток из первой версии фразы: «завтра в 6, ой, в 7»
+// должно остаться вечером, а не прыгнуть на семь утра.
+export function extractWhen(text, ctx, opts = {}) {
+  const tz = ctx.tz;
+  const nowParts = zonedParts(ctx.now, tz);
+  const low = normalize(text);
+  const mask = new Uint8Array(text.length);
+
+  let date = null;
+  let time = null;
+  let remindOverride = null;
+  let repeat = null;
+  let repeatWeekday = null;
+  let repeatDayPart = null;
+  let yearly = false;
+  let timer = false;
+  let atMoment = false;
+  // «поставь будильник на 6» — часы такой просьбы всегда утренние.
+  const wakeUp = ALARM_RE.test(low);
+
+  const everyYear = firstMatch(low, mask, YEARLY_RE.source);
+  if (everyYear) {
+    yearly = true;
+    markRange(mask, everyYear.index, everyYear.index + everyYear[0].length);
+  }
+
+  // Шаг больше одного разбираем первым: иначе «каждые две недели» съест правило «каждую неделю».
+  const everyStep = firstMatch(low, mask, REPEAT_EVERY_RE.source);
+  if (everyStep) {
+    const count = REPEAT_COUNTS[normalize(everyStep[1])];
+    const unit = REPEAT_UNITS.find(u => new RegExp(`^(?:${u.pattern})$`, "iu").test(normalize(everyStep[2])));
+    if (count && unit) {
+      repeat = count > 1 ? { kind: unit.kind, every: count } : { kind: unit.kind };
+      markRange(mask, everyStep.index, everyStep.index + everyStep[0].length);
+    }
+  }
+
+  if (!repeat) {
+    for (const rule of REPEAT_RULES) {
+      const m = firstMatch(low, mask, rule.pattern);
+      if (!m) continue;
+      repeat = { kind: rule.kind };
+      if (rule.kind === "weekly") {
+        // «по вторникам и четвергам» — дней может быть несколько.
+        const hits = REPEAT_WEEKDAY_HINT.filter(w => new RegExp(w.pattern, "iu").test(m[0]));
+        if (hits.length > 1) repeat.days = [...new Set(hits.map(h => h.idx))].sort((a, b) => a - b);
+        else if (hits.length === 1) repeatWeekday = hits[0].idx;
+      }
+      if (rule.kind === "daily") {
+        const part = REPEAT_DAY_PART.find(p => new RegExp(`${p.pattern}${NB}`, "iu").test(m[0]));
+        if (part) repeatDayPart = part.hour;
+      }
+      markRange(mask, m.index, m.index + m[0].length);
+      break;
+    }
+  }
+
+  // «поставь таймер на 5 минут» — курица в духовке не ждёт до пяти вечера.
+  const timerHit = firstMatch(low, mask, `${NBL}(таймер|будильник|напоминани${W})\\s*(?:на\\s+)?(\\d{1,3}|полчаса|${W}+)\\s*(секунд${W}*|сек${NB}|минут${W}*|мин${NB}|час${W}*)?`);
+  if (timerHit) {
+    const word = timerHit[1];
+    const rawNum = timerHit[2];
+    const unit = timerHit[3] || "";
+    const isTimer = /^таймер/.test(word);
+    const inHours = /^час/.test(unit) || /^час/.test(rawNum);
+    // Отсчёт часами задаёт только таймер: «будильник на 7 часов» и «напоминание на 17 часов» —
+    // это время суток. Будильнику и напоминанию оставляем минуты: «на 20 минут» иначе не понять.
+    let ms = null;
+    if (isTimer || (unit && !inHours)) {
+      if (rawNum === "полчаса") ms = 30 * 60000;
+      else if (/^час/.test(rawNum)) ms = 3600000;
+      else {
+        const value = /^\d+$/.test(rawNum) ? Number(rawNum) : wordNumber(rawNum);
+        if (value != null && value > 0) {
+          if (/^час/.test(unit)) ms = value * 3600000;
+          // Таймер считает реальные секунды; «на 30 секунд» — не округляем до минуты.
+          else if (/^сек/.test(unit)) ms = value * 1000;
+          else ms = value * 60000;
+        }
+      }
+    }
+    if (ms != null) {
+      const target = zonedParts(ctx.now + ms, tz);
+      date = { year: target.year, month: target.month, day: target.day };
+      time = { hour: target.hour, minute: target.minute, second: target.second };
+      timer = true;
+      markRange(mask, timerHit.index, timerHit.index + timerHit[0].length);
+    }
+  }
+
+  const remind = firstMatch(low, mask, `${NBL}за\\s+(\\d{1,3}|полчаса|час|сутки|недел${W}*|месяц|${W}+)\\s*(минут${W}*|мин${NB}|час${W}*|дн${W}*|сут${W}*|день|недел${W}*|месяц${W}*)?`);
+  if (remind) {
+    const rawNum = remind[1];
+    const unit = remind[2] || "";
+    let minutes = null;
+    if (rawNum === "полчаса") minutes = 30;
+    else if (rawNum === "час") minutes = 60;
+    else if (rawNum === "сутки") minutes = 1440;
+    else if (/^недел/.test(rawNum)) minutes = 7 * 1440;
+    else if (/^месяц/.test(rawNum)) minutes = 30 * 1440;
+    else {
+      const value = /^\d+$/.test(rawNum) ? Number(rawNum) : wordNumber(rawNum);
+      if (value != null) {
+        if (/^час/.test(unit)) minutes = value * 60;
+        else if (/^дн|^сут|^день/.test(unit)) minutes = value * 1440;
+        else if (/^недел/.test(unit)) minutes = value * 7 * 1440;
+        else if (/^месяц/.test(unit)) minutes = value * 30 * 1440;
+        else if (/^мин/.test(unit)) minutes = value;
+        else minutes = null;
+      }
+    }
+    if (minutes != null) {
+      remindOverride = Math.max(0, Math.min(minutes, 7 * 1440));
+      markRange(mask, remind.index, remind.index + remind[0].length);
+    }
+  }
+
+  const through = firstMatch(low, mask, `${NBL}через\\s+(\\d{1,3}|полчаса|полтора|полторы|пару|несколько|${W}+)\\s*(секунд${W}*|сек${NB}|минут${W}*|мин${NB}|час${W}*|дн${W}*|день|недел${W}*|месяц${W}*)?`);
+  if (through) {
+    const rawNum = through[1];
+    const unit = through[2] || "";
+    let ms = null;
+    if (rawNum === "полчаса") ms = 30 * 60000;
+    else if (/^полтор/.test(rawNum)) ms = 90 * 60000;
+    else if (/^час/.test(rawNum)) ms = 3600000;
+    else if (/^недел/.test(rawNum)) ms = 7 * 86400000;
+    else if (/^месяц/.test(rawNum)) ms = 30 * 86400000;
+    else {
+      // «через пару часов», «через несколько дней» — берём разумную середину.
+      const value = /^\d+$/.test(rawNum)
+        ? Number(rawNum)
+        : rawNum === "пару" ? 2 : rawNum === "несколько" ? 3 : wordNumber(rawNum);
+      if (value != null) {
+        if (/^час/.test(unit)) ms = value * 3600000;
+        else if (/^дн|^день/.test(unit)) ms = value * 86400000;
+        else if (/^недел/.test(unit)) ms = value * 7 * 86400000;
+        else if (/^месяц/.test(unit)) ms = value * 30 * 86400000;
+        else if (/^мин/.test(unit)) ms = value * 60000;
+        else if (/^сек/.test(unit)) ms = value * 1000;
+      }
+    }
+    if (ms != null) {
+      const target = zonedParts(ctx.now + ms, tz);
+      date = { year: target.year, month: target.month, day: target.day };
+      if (ms < 3 * 86400000) {
+        time = { hour: target.hour, minute: target.minute, second: target.second };
+      }
+      // «через час» и меньше — это просьба подать голос в тот момент, а не к нему подготовиться.
+      if (ms <= 3600000) atMoment = true;
+      markRange(mask, through.index, through.index + through[0].length);
+    }
+  }
+
+  if (!date) {
+    // «запиши на завтра», «сдвинь на послезавтра» — предлог тоже надо съесть,
+    // иначе он останется в названии записи.
+    const rel = firstMatch(low, mask, `${NBL}(?:(?:на|до|к)\\s+)?(?:после\\s*завтра|послезавтра|завтр[ао]|сегодн[яе]|на\\s+выходны[хе]|в\\s+выходные)${NB}`);
+    if (rel) {
+      const word = rel[0];
+      if (/после\s*завтра|послезавтра/.test(word)) date = addDays(nowParts, 2);
+      else if (/завтр/.test(word)) date = addDays(nowParts, 1);
+      else if (/сегодн/.test(word)) date = { year: nowParts.year, month: nowParts.month, day: nowParts.day };
+      else if (/выходны/.test(word)) date = addDays(nowParts, weekdayDelta(nowParts.weekday, 6, false));
+      if (date) markRange(mask, rel.index, rel.index + word.length);
+    }
+  }
+
+  // «в течение недели», «за неделю сделать» — срок, то есть последний рабочий день недели.
+  if (!date) {
+    const m = firstMatch(low, mask, `${NBL}в\\s+течение\\s+(недел${W}*|месяца)${NB}`);
+    if (m) {
+      date = /^недел/.test(m[1])
+        ? addDays(nowParts, weekdayDelta(nowParts.weekday, 5, false))
+        : { year: nowParts.year, month: nowParts.month, day: lastDayOf(nowParts.year, nowParts.month) };
+      markRange(mask, m.index, m.index + m[0].length);
+    }
+  }
+
+  // «в начале следующего месяца», «в конце квартала», «в середине сентября», «первые числа месяца».
+  if (!date) {
+    const m = firstMatch(low, mask, `${NBL}(?:в\\s+)?(?:(начал|середин|конц)${W}*|(перв${W}*\\s+числ${W}*))\\s+(?:(следующ${W}*|этот|этом|это[йм])\\s+)?(недел${W}*|месяц${W}*|квартал${W}*|год${W}*|${MONTH_PATTERNS.join("|")})${NB}`);
+    if (m) {
+      const part = m[2] ? "начал" : m[1];
+      const next = /следующ/.test(m[3] || "");
+      const unit = m[4];
+      date = relativeSpanDate(part, next, unit, nowParts);
+      if (date) markRange(mask, m.index, m.index + m[0].length);
+    }
+  }
+
+  // «на следующей неделе», «в следующем месяце», «в следующем квартале», «в следующем году».
+  if (!date) {
+    const m = firstMatch(low, mask, `${NBL}(?:на|в)\\s+(?:следующ${W}*|след|будущ${W}*)\\s+(недел${W}*|месяц${W}*|квартал${W}*|год${W}*)${NB}`);
+    if (m) {
+      date = relativeSpanDate("начал", true, m[1], nowParts);
+      if (date) markRange(mask, m.index, m.index + m[0].length);
+    }
+  }
+
+  if (!date) {
+    for (const wd of WEEKDAYS) {
+      // «до пятницы» и «к понедельнику» — это срок, то есть тот же день недели.
+      const m = firstMatch(low, mask, `${NBL}(?:в|во|до|к|на)\\s+(эт[уо]т?\\s+|следующ${W}+\\s+|ближайш${W}+\\s+)?(?:${wd.pattern})${NB}`);
+      if (m) {
+        // «В следующую пятницу», сказанное в воскресенье, — это пятница наступающей недели,
+        // поэтому считаем от её понедельника, а не «плюс семь дней».
+        if (/следующ/.test(m[1] || "")) {
+          const nextMonday = (8 - nowParts.weekday) % 7 || 7;
+          date = addDays(nowParts, nextMonday + (wd.idx === 0 ? 6 : wd.idx - 1));
+        } else {
+          date = addDays(nowParts, weekdayDelta(nowParts.weekday, wd.idx, false));
+        }
+        markRange(mask, m.index, m.index + m[0].length);
+        break;
+      }
+    }
+  }
+
+  // «на этой неделе», «в этом месяце» — после дня недели, чтобы «…неделе в пятницу» взяло пятницу.
+  {
+    const m = firstMatch(low, mask, `${NBL}(?:на|в)\\s+(?:эт(?:ой|ом|у|от)|текущ${W}*)\\s+(недел${W}*|месяц${W}*)${NB}`);
+    if (m) {
+      if (!date) {
+        if (/^недел/.test(m[1])) {
+          date = addDays(nowParts, weekdayDelta(nowParts.weekday, 5, false));
+        } else {
+          date = { year: nowParts.year, month: nowParts.month, day: lastDayOf(nowParts.year, nowParts.month) };
+        }
+      }
+      markRange(mask, m.index, m.index + m[0].length);
+    }
+  }
+
+  if (!date) {
+    for (let i = 0; i < MONTH_PATTERNS.length; i += 1) {
+      const m = firstMatch(low, mask, `${NBL}(\\d{1,2})\\s*(?:-?[а-я]{1,2}\\s+|\\s*)(?:${MONTH_PATTERNS[i]})${NB}`);
+      if (m) {
+        const day = Number(m[1]);
+        if (day >= 1 && day <= 31) {
+          let year = nowParts.year;
+          if (i < nowParts.month || (i === nowParts.month && day < nowParts.day)) year += 1;
+          date = { year, month: i, day };
+          markRange(mask, m.index, m.index + m[0].length);
+        }
+        break;
+      }
+    }
+  }
+
+  // «первого сентября», «двадцать третьего декабря» — в речи число почти всегда словом.
+  if (!date) {
+    for (let i = 0; i < MONTH_PATTERNS.length; i += 1) {
+      const m = firstMatch(low, mask, `${NBL}${ORDINAL_DAY_PATTERN}\\s+(?:${MONTH_PATTERNS[i]})${NB}`);
+      if (!m) continue;
+      const day = ordinalDay(m[1], m[2]);
+      if (day != null) {
+        date = dateInMonth(day, i, nowParts);
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+      break;
+    }
+  }
+
+  if (!date) {
+    const m = firstMatch(low, mask, `${NBL}(\\d{1,2})\\s*(?:-?[а-я]{0,2})?\\s*числа${NB}`);
+    if (m) {
+      const day = Number(m[1]);
+      if (day >= 1 && day <= 31) {
+        date = dateOnDayNumber(day, nowParts);
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // «второго числа», «двадцать пятого числа»
+  if (!date) {
+    const m = firstMatch(low, mask, `${NBL}${ORDINAL_DAY_PATTERN}\\s+числа${NB}`);
+    if (m) {
+      const day = ordinalDay(m[1], m[2]);
+      if (day != null) {
+        date = dateOnDayNumber(day, nowParts);
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  if (!date) {
+    const m = firstMatch(low, mask, "(?<![\\d.])(\\d{1,2})[.\\/](\\d{1,2})(?:[.\\/](\\d{2,4}))?(?![\\d.])");
+    if (m) {
+      const day = Number(m[1]);
+      const month = Number(m[2]) - 1;
+      if (day >= 1 && day <= 31 && month >= 0 && month <= 11) {
+        let year = m[3] ? Number(m[3]) : nowParts.year;
+        if (year < 100) year += 2000;
+        if (!m[3] && (month < nowParts.month || (month === nowParts.month && day < nowParts.day))) year += 1;
+        date = { year, month, day };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // «вечером в 9», «утром в 6 30» — уточнение стоит перед часами, а не после.
+  let partHint = opts.modHint || "";
+  for (const hint of DAY_PART_HINTS) {
+    const m = firstMatch(low, mask, `${NBL}(?:${hint.pattern})\\s+(?=(?:в|к|на|около)\\s+(?:\\d|пол|без${NB}|(?:${NUM_WORD_ALT})${NB}))`);
+    if (m) {
+      partHint = hint.mod;
+      markRange(mask, m.index, m.index + m[0].length);
+      break;
+    }
+  }
+
+  const dayKnown = () => Boolean(date) || Boolean(repeat);
+
+  // «с 15 до 16», «с 10:30 до 12» — записываем начало.
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}с\\s+(\\d{1,2})(?:[:.](\\d{2}))?\\s+до\\s+(\\d{1,2})(?:[:.](\\d{2}))?${NB}`);
+    if (m) {
+      const hour = Number(m[1]);
+      const minute = m[2] ? Number(m[2]) : 0;
+      if (hour <= 23 && minute <= 59) {
+        time = { hour: resolveHour(hour, minute, partHint, nowParts, dayKnown(), wakeUp), minute };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}(?:в|к|на)\\s*(\\d{1,2})[:.](\\d{2})${NB}|${NBL}(\\d{1,2}):(\\d{2})${NB}`);
+    if (m) {
+      const hour = Number(m[1] ?? m[3]);
+      const minute = Number(m[2] ?? m[4]);
+      if (hour <= 23 && minute <= 59) {
+        time = { hour, minute };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // STT без пробела и двоеточия: «в930», «на715» — только «ровные» минуты.
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}(?:в|к|на)\\s*(\\d{1,2})([0-5]\\d)(?!\\d)${NB}\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const hour = Number(m[1]);
+      const minute = Number(m[2]);
+      if (hour <= 23 && minute <= 59 && (minute === 0 || minute === 15 || minute === 30 || minute === 45)) {
+        time = { hour: resolveHour(hour, minute, m[3] || partHint, nowParts, dayKnown(), wakeUp), minute };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // Распознавание речи пишет время без двоеточия: «в 9 30», «на 7 15», «в 12 15», «10-15», «10 15».
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}(?:(?:в|к|на)\\s+)?(\\d{1,2})\\s*[-–—:]\\s*(\\d{2})(?!\\d)${NB}\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const hour = Number(m[1]);
+      const minute = Number(m[2]);
+      if (hour <= 23 && minute <= 59) {
+        time = { hour: resolveHour(hour, minute, m[3] || partHint, nowParts, dayKnown(), wakeUp), minute };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}(?:в|к|на)\\s+(\\d{1,2})\\s+(\\d{2})(?!\\s*(?:минут|мин${NB}|час|числ))${NB}\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const hour = Number(m[1]);
+      const minute = Number(m[2]);
+      if (hour <= 23 && minute <= 59) {
+        time = { hour: resolveHour(hour, minute, m[3] || partHint, nowParts, dayKnown(), wakeUp), minute };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+  // Без предлога: «встреча 10 15» (часто STT), не путать с «15 минут/числа».
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}(\\d{1,2})\\s+(\\d{2})(?!\\s*(?:минут|мин${NB}|час|числ|год))${NB}\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const hour = Number(m[1]);
+      const minute = Number(m[2]);
+      if (hour <= 23 && minute <= 59 && minute % 5 === 0) {
+        time = { hour: resolveHour(hour, minute, m[3] || partHint, nowParts, dayKnown(), wakeUp), minute };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // «в половине седьмого», «полвосьмого»
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}(?:(?:в|на|к)\\s+)?(?:половине\\s+|пол)(${W}+?)\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const ord = ORDINAL_HOURS[m[1]];
+      if (ord != null) {
+        let hour = (ord + 11) % 12 || 12;
+        const mod = m[2] || partHint;
+        if (/ночи/.test(mod)) hour = hour === 12 ? 0 : (hour >= 8 ? hour + 12 : hour);
+        else if (/вечера/.test(mod) && hour < 12) hour += 12;
+        else if (!mod) hour = resolveBareHour(hour, 30, nowParts, dayKnown(), wakeUp);
+        time = { hour: hour % 24, minute: 30 };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // «в четверть пятого» → 4:15
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}(?:(?:в|на|к)\\s+)?четверть\\s+(${W}+?)\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const ord = ORDINAL_HOURS[m[1]];
+      if (ord != null) {
+        let hour = (ord + 11) % 12 || 12;
+        const mod = m[2] || partHint;
+        if (/ночи/.test(mod)) hour = hour === 12 ? 0 : (hour >= 8 ? hour + 12 : hour);
+        else if (/вечера/.test(mod) && hour < 12) hour += 12;
+        else if (!mod) hour = resolveBareHour(hour, 15, nowParts, dayKnown(), wakeUp);
+        time = { hour: hour % 24, minute: 15 };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // «без четверти восемь» → 7:45
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}без\\s+четверти\\s+(\\d{1,2}|${W}+)\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const hourValue = /^\d+$/.test(m[1]) ? Number(m[1]) : wordNumber(m[1]);
+      if (hourValue != null && hourValue >= 1 && hourValue <= 23) {
+        let hour = hourValue - 1 || 12;
+        const mod = m[2] || partHint;
+        const minute = 45;
+        if (/ночи/.test(mod)) hour = hour === 12 ? 0 : (hour >= 8 ? hour + 12 : hour);
+        else if (/вечера/.test(mod) && hour < 12) hour += 12;
+        else if (!mod) hour = resolveBareHour(hour, minute, nowParts, dayKnown(), wakeUp);
+        time = { hour: hour % 24, minute };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // «без пятнадцати восемь», «без двадцати шесть вечера»
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}без\\s+(\\d{1,2}|${W}+)\\s+(\\d{1,2}|${W}+)\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const minutes = /^\d+$/.test(m[1]) ? Number(m[1]) : wordNumber(m[1]);
+      const hourValue = /^\d+$/.test(m[2]) ? Number(m[2]) : wordNumber(m[2]);
+      if (minutes != null && minutes >= 1 && minutes <= 59 && hourValue != null && hourValue >= 1 && hourValue <= 23) {
+        let hour = hourValue - 1 || 12;
+        const mod = m[3] || partHint;
+        const minute = 60 - minutes;
+        if (/ночи/.test(mod)) hour = hour === 12 ? 0 : (hour >= 8 ? hour + 12 : hour);
+        else if (/вечера/.test(mod) && hour < 12) hour += 12;
+        else if (!mod) hour = resolveBareHour(hour, minute, nowParts, dayKnown(), wakeUp);
+        time = { hour: hour % 24, minute };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}${TIME_LEAD}(?:в|к|на)\\s+(\\d{1,2})\\s*(?:час${W}*)?\\s*(?:ноль\\s+ноль|ровно)?\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const hour = Number(m[1]);
+      if (hour <= 23) {
+        time = { hour: resolveHour(hour, 0, m[2] || partHint, nowParts, dayKnown(), wakeUp), minute: 0 };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
+  // «в пять», «в шесть тридцать», «в двенадцать ноль ноль»
+  if (!time) {
+    const pattern = `${NBL}${TIME_LEAD}(?:в|к|на)\\s+(${W}+)(?:\\s+(${MINUTE_WORD_PATTERN})${NB})?\\s*(?:час${W}*)?\\s*(утра|дня|вечера|ночи)?${NB}`;
+    for (const m of eachMatch(low, mask, pattern)) {
+      const value = wordNumber(m[1]);
+      if (value == null || value > 23) continue;
+      const minute = m[2] ? minuteWords(m[2]) ?? 0 : 0;
+      time = { hour: resolveHour(value, minute, m[3] || partHint, nowParts, dayKnown(), wakeUp), minute };
+      markRange(mask, m.index, m.index + m[0].length);
+      break;
+    }
+  }
+
+  // Частая устная форма без «в»: «десять пятнадцать», «десять сорок пять», «десять десять».
+  if (!time) {
+    const pattern = `${NBL}(${NUM_WORD_ALT})\\s+(${MINUTE_WORD_PATTERN})${NB}\\s*(утра|дня|вечера|ночи)?${NB}`;
+    for (const m of eachMatch(low, mask, pattern)) {
+      const value = wordNumber(m[1]);
+      if (value == null || value > 23) continue;
+      // Не путать с «через десять пятнадцать минут» — минуты-единицы без часа там уже сняты.
+      const minute = minuteWords(m[2]);
+      if (minute == null) continue;
+      time = { hour: resolveHour(value, minute, m[3] || partHint, nowParts, dayKnown(), wakeUp), minute };
+      markRange(mask, m.index, m.index + m[0].length);
+      break;
+    }
+  }
+
+  // «около 8», «около пяти», «в районе трёх» — предлога «в» перед часом может не быть.
+  if (!time) {
+    for (const m of eachMatch(low, mask, `${NBL}(?:около|в\\s+районе|порядка)\\s+(\\d{1,2}|${W}+)\\s*(?:час${W}*)?\\s*(утра|дня|вечера|ночи)?${NB}`)) {
+      const value = /^\d+$/.test(m[1]) ? Number(m[1]) : wordNumber(m[1]);
+      if (value == null || value > 23) continue;
+      time = { hour: resolveHour(value, 0, m[2] || partHint, nowParts, dayKnown(), wakeUp), minute: 0 };
+      markRange(mask, m.index, m.index + m[0].length);
+      break;
+    }
+  }
+
+  if (!time) {
+    const noon = firstMatch(low, mask, `${NBL}в\\s+(?:полдень|полночь)${NB}`);
+    if (noon) {
+      time = noon[0].includes("полночь") ? { hour: 0, minute: 0 } : { hour: 12, minute: 0 };
+      markRange(mask, noon.index, noon.index + noon[0].length);
+    }
+  }
+
+  if (!time) {
+    for (const vague of VAGUE_TIMES) {
+      const m = firstMatch(low, mask, `${NBL}(?:${vague.pattern})${NB}`);
+      if (m) {
+        time = { hour: vague.hour, minute: 0 };
+        markRange(mask, m.index, m.index + m[0].length);
+        break;
+      }
+    }
+  }
+
+  if (!time) {
+    for (const part of DAY_PARTS) {
+      const m = firstMatch(low, mask, `${NBL}(?:${part.pattern})${NB}`);
+      if (m) {
+        time = { hour: part.hour, minute: 0 };
+        markRange(mask, m.index, m.index + m[0].length);
+        break;
+      }
+    }
+  }
+
+  let dateInferred = false;
+
+  if (repeat) {
+    if (repeatDayPart != null && !time) time = { hour: repeatDayPart, minute: 0 };
+    if (!date) {
+      const timePassed = time ? time.hour * 60 + time.minute <= nowParts.hour * 60 + nowParts.minute : true;
+      let start = { year: nowParts.year, month: nowParts.month, day: nowParts.day };
+      if (repeat.kind === "weekly" && repeat.days?.length) {
+        // Из нескольких дней недели берём ближайший наступающий.
+        const deltas = repeat.days.map(d => {
+          const delta = (d - nowParts.weekday + 7) % 7;
+          return delta === 0 && timePassed ? 7 : delta;
+        });
+        start = addDays(nowParts, Math.min(...deltas));
+      } else if (repeat.kind === "weekly" && repeatWeekday != null) {
+        let delta = (repeatWeekday - nowParts.weekday + 7) % 7;
+        if (delta === 0 && timePassed) delta = 7;
+        start = addDays(nowParts, delta);
+      } else if (timePassed) {
+        start = addDays(nowParts, 1);
+      }
+      if (repeat.kind === "weekdays") {
+        while (weekdayOf(start) === 0 || weekdayOf(start) === 6) start = addDays(start, 1);
+      }
+      if (repeat.kind === "weekends") {
+        while (weekdayOf(start) !== 0 && weekdayOf(start) !== 6) start = addDays(start, 1);
+      }
+      date = start;
+    }
+  }
+
+  if (time && !date) {
+    const todayMinutes = nowParts.hour * 60 + nowParts.minute;
+    const targetMinutes = time.hour * 60 + time.minute;
+    date = targetMinutes <= todayMinutes
+      ? addDays(nowParts, 1)
+      : { year: nowParts.year, month: nowParts.month, day: nowParts.day };
+    dateInferred = true;
+  }
+
+  return { date, time, remindOverride, dateInferred, repeat, yearly, timer, atMoment, rest: applyMask(text, mask) };
+}
+
+// Типы адресов: и «на улице Строителей», и «на Ленинском проспекте».
+const STREET_TYPE = "улиц[еы]|проспект[уе]?|переулке|шоссе|бульваре|площади|набережной|проезде|аллее|микрорайоне";
+// «в поликлинике на Мира» — уточнение улицы принадлежит месту, а не названию.
+const PLACE_KNOWN = new RegExp(`(?:^|\\s)(?:на|в|у)\\s+(таганк[\\p{L}]*|офис[\\p{L}]*|дом[ае]?|кафе|зуме|zoom|скайпе|работе|школе|садике|поликлиник[\\p{L}]*|больниц[\\p{L}]*|салоне|спортзале|зале|парке|аптеке|магазине|банке|почте|даче|бассейне|клиник[еи]|ресторане|мфц|шиномонтаже|автосервисе|сервисе|химчистке|налоговой)(\\s+на\\s+[А-ЯЁ][\\p{L}-]+)?(?=$|[\\s,.!?])`, "iu");
+const PLACE_STREET = new RegExp(`(?:^|\\s)(?:на|в|у)\\s+((?:${STREET_TYPE})\\s+[А-ЯЁ][\\p{L}\\d-]+)`, "iu");
+// STT часто даёт строчные: «на тимирязевской», «на беговой» — не только «На Тимирязевской».
+const PLACE_PROPER = new RegExp(`(?:^|\\s)(?:на|в|у)\\s+([А-ЯЁа-яё][\\p{L}\\d-]{2,}(?:\\s+(?:${STREET_TYPE}|[А-ЯЁа-яё][\\p{L}\\d-]+))?)`, "iu");
+
+function capitalize(value) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+// Строчные «на неделю/завтра» — не место; станции вроде «тимирязевской» — место.
+const PLACE_STOP = new Set([
+  "завтра", "сегодня", "послезавтра", "неделю", "недели", "неделя", "неделе",
+  "месяц", "месяца", "месяце", "час", "часа", "часов", "минуту", "минуты", "минут",
+  "утром", "вечером", "днем", "ночи", "обед", "обеда", "потом", "время", "срок",
+  "утро", "вечер", "день", "ночь",
+  // Полка заметок — не адрес («положи в заметки», «на будущее»).
+  "заметки", "заметках", "заметку", "заметке", "заметка", "будущее", "будущем",
+  "идею", "идея", "идеи", "мысль", "мысли",
+]);
+
+function isPlaceStop(raw) {
+  const words = normalize(raw).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  if (PLACE_STOP.has(words.join(" "))) return true;
+  return PLACE_STOP.has(words[0]);
+}
+
+function matchPlace(text) {
+  const known = text.match(PLACE_KNOWN);
+  if (known) {
+    return {
+      value: capitalize(`${known[1]}${known[2] || ""}`.trim()),
+      index: known.index,
+      length: known[0].length,
+    };
+  }
+  const street = text.match(PLACE_STREET);
+  if (street) return { value: capitalize(street[1].trim()), index: street.index, length: street[0].length };
+  const proper = text.match(PLACE_PROPER);
+  if (proper) {
+    const raw = proper[1].trim();
+    if (isPlaceStop(raw)) return null;
+    return { value: capitalize(raw), index: proper.index, length: proper[0].length };
+  }
+  return null;
+}
+
+function detectPlace(text) {
+  return matchPlace(text)?.value || "";
+}
+
+function cutRange(text, index, length) {
+  return `${text.slice(0, index)} ${text.slice(index + length)}`.replace(/\s{2,}/g, " ").replace(/\s+([,.!?])/g, "$1").trim();
+}
+
+const FILLER_ANYWHERE = new RegExp(`(?:^|\\s)(?:напомни(?:те)?(?:\\s+мне)?|напоминай|поставь\\s+напоминание|не\\s+забы(?:ть|л|ла))(?![${L}])`, "giu");
+
+// Слова-паразиты: распознавание речи записывает их исправно, а в названии они мусор.
+const FILLER_SPEECH = new RegExp(`(?:^|\\s)(?:э+|м{2,}|ну|короче|типа|как\\s+бы|это\\s+самое|эт\\s+самое|в\\s+общем|в\\s+принципе|собственно|значит|блин|вот|ровно|примерно|приблизительно|аккурат|где-?то|по\\s+мск|по\\s+москве)(?![${L}])`, "giu");
+// Предлог или союз на краю названия остаётся, когда время и дату уже вырезали.
+const EDGE_WORD = new RegExp(`\\s+(?:на|в|во|к|ко|с|со|до|у|за|про|и|а|но|же|ещ[её]|там|или)$`, "iu");
+// Название из одних предлогов и цифр смысла не несёт — честнее показать «Без названия».
+const JUNK_WORD = new RegExp(`^(?:на|в|во|к|ко|с|со|до|у|за|про|и|а|но|же|там|это|вот|ну|тогда|давай|уже|или|час|часов|\\d{1,4}|${NUM_WORD_ALT})$`, "iu");
+
+function junkOnly(text) {
+  const words = normalize(text).split(/[^а-яa-z0-9]+/u).filter(Boolean);
+  return !words.length || words.every(w => JUNK_WORD.test(w));
+}
+
+// «через 5 минут» при настройке «предупреждать за 15» дало бы сигнал в прошлом.
+// Запас не может быть больше, чем осталось времени.
+function fitRemind(minutes, when, ctx) {
+  if (!minutes || !when.date || !when.time) return minutes;
+  const target = zonedToUtc({ ...when.date, ...when.time }, ctx.tz);
+  const left = Math.floor((target - ctx.now) / 60000);
+  if (left < 0) return minutes;
+  return Math.min(minutes, left);
+}
+
+function remindFor(type, when, ctx, settings) {
+  // Таймер звонит ровно в конце отсчёта — предупреждать заранее нечего.
+  if (when.timer) return 0;
+  // Явную просьбу «напомни за десять минут» уважаем, урезав её до оставшегося времени.
+  if (when.remindOverride != null) return fitRemind(when.remindOverride, when, ctx);
+  // «через двадцать минут» — человек назвал момент, когда хочет услышать напоминание,
+  // а не время события, до которого его надо подготовить.
+  if (when.atMoment) return 0;
+  return fitRemind(defaultRemind(type, settings), when, ctx);
+}
+
+function remindExplicit(when) {
+  return when.timer || when.remindOverride != null || when.atMoment;
+}
+
+function isWeakTitle(title) {
+  if (!title || junkOnly(title)) return true;
+  return LEAD_VERB_ONLY.test(normalize(title));
+}
+
+function defaultItemTitle(when, type, base, ctx) {
+  const low = normalize(base);
+  const saysTimer = new RegExp(`${NBL}таймер${NB}`, "iu").test(low);
+  const saysAlarmWord = ALARM_RE.test(low);
+  // Таймер-отсчёт всегда «Таймер», даже если сказали «будильник на 20 минут».
+  // Явный часовой будильник («на 7») — «Будильник».
+  if (when.timer) {
+    if (saysAlarmWord && !saysTimer) return "Будильник";
+    return "Таймер";
+  }
+  if (type === "alarm" || saysAlarmWord) return "Будильник";
+  return "Без названия";
+}
+
+function cleanTitle(raw) {
+  // Паразиты убираем первыми: за «эээ ну короче» часто стоит ещё и «надо».
+  let t = String(raw || "").replace(FILLER_SPEECH, " ").replace(/\s{2,}/g, " ").trim();
+  t = t.replace(NOTE_SHELF_PHRASE, " ").replace(/\s{2,}/g, " ").trim();
+  // «создай заметку» без текста — не название; «установить приложение» — название, не трогаем.
+  t = t.replace(/^(?:создай|создать|заведи|завести)(?![а-яё])[\s,:;.-]*/giu, "").trim();
+  for (let i = 0; i < 5; i += 1) {
+    const next = t.replace(LEAD_WORDS, "");
+    if (next === t) break;
+    t = next.trim();
+  }
+  // Род объекта после глагола: «запиши заметку про отпуск» → «про отпуск».
+  t = t.replace(/^(?:нов(?:ую|ая)\s+)?(?:заметк[ауеи]|иде[юяи]|мысл[ьи])(?![а-яё])[\s,:;.-]*/giu, "").trim();
+  t = t.replace(/^(?:на\s+будущее|чтобы\s+не\s+забыть)(?![а-яё])[\s,:;.-]*/giu, "").trim();
+  t = t.replace(FILLER_ANYWHERE, " ").trim();
+  t = t.replace(FILLER_SPEECH, " ").trim();
+  t = t.replace(/^(?:что|чтобы)\s+/iu, "");
+  t = t.replace(/^(?:и|а|но|же|ну|или)\s+/iu, "");
+  t = t.replace(/^[\s,.:;-]+/u, "").replace(/[\s,.:;-]+$/u, "");
+  t = t.replace(/\s{2,}/g, " ");
+  for (let i = 0; i < 3; i += 1) {
+    const next = t.replace(EDGE_WORD, "").replace(/[\s,.:;-]+$/u, "");
+    if (next === t) break;
+    t = next;
+  }
+  return t && !junkOnly(t) ? capitalize(t) : "";
+}
+
+function splitChunks(text) {
+  const parts = text.split(SPLIT_RE).map(s => s.trim()).filter(Boolean);
+  return parts.length ? parts : [text.trim()];
+}
+
+// Человек часто поправляет себя на ходу: «завтра в десять, а нет, лучше в двенадцать».
+const CORRECTION_MARKERS = "а\\s+нет|нет\\s+(?:погоди|стоп|подожди)|нет|стоп|хотя|а\\s+точнее|точнее|вернее|или\\s+(?:лучше|давай)|а\\s+лучше|давай\\s+лучше|лучше|то\\s+есть|ой|тьфу|погоди|подожди|пардон|извини|не\\s+то";
+const CORRECTION_RE = new RegExp(`[\\s,.:;—-]+(?:${CORRECTION_MARKERS})${NB}[\\s,.:;—-]*`, "giu");
+// Отдельный случай — «не в десять, а в двенадцать»: старое время нужно просто выбросить.
+const NEGATED_RE = new RegExp(`${NBL}не\\s+(?:в|на|к)\\s+[^,]{1,30}?,?\\s+а\\s+(?=(?:в|на|к)\\s)`, "iu");
+
+// «…а нет, лучше давай в двенадцать» — вторую подряд вводную тоже убираем, иначе она попадёт в название.
+const LEAD_MARKER_RE = new RegExp(`^(?:${CORRECTION_MARKERS}|давай(?:те)?|тогда)${NB}[\\s,.:;—-]*`, "iu");
+
+function dropLeadMarkers(text) {
+  let out = text.trim();
+  for (let i = 0; i < 3; i += 1) {
+    const next = out.replace(LEAD_MARKER_RE, "").trim();
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+function splitCorrection(chunk) {
+  const negated = chunk.match(NEGATED_RE);
+  if (negated) {
+    const head = chunk.slice(0, negated.index).trim();
+    const tail = chunk.slice(negated.index + negated[0].length).trim();
+    // «не в 10, а в 12 встреча с врачом»: отменённый вариант просто выбрасываем,
+    // а остаток фразы разбираем целиком — иначе «встреча с врачом» уедет в мусор.
+    if (tail) return { head, tail, negated: true };
+  }
+  const re = new RegExp(CORRECTION_RE.source, "giu");
+  let last = null;
+  let m;
+  while ((m = re.exec(chunk)) !== null) {
+    last = m;
+    if (re.lastIndex === m.index) re.lastIndex += 1;
+  }
+  if (!last) return null;
+  const head = chunk.slice(0, last.index).trim();
+  const tail = dropLeadMarkers(chunk.slice(last.index + last[0].length).trim());
+  if (!head || !tail) return null;
+  return { head, tail };
+}
+
+const FILLER_WORD = /^(?:давай(?:те)?|тогда|уже|же|там|это|вот|ладно|пожалуй|наверное|лучше|а|и|в|на|к)$/iu;
+
+// Поправку применяем только если во второй половине фразы речь о времени или месте.
+// Если там появилось новое дело («хлеб, нет, молоко»), разбираем фразу целиком — иначе слово потеряется.
+function onlyFillerWords(text) {
+  return normalize(String(text || ""))
+    .split(/[^а-яa-z0-9]+/u)
+    .filter(Boolean)
+    .every(word => FILLER_WORD.test(word));
+}
+
+// Поправка звучит в том же разговоре, что и первая версия: если сначала было «в 6»
+// с явным днём (то есть 18:00), то «в 7» — это 19:00, а не семь утра.
+function halfOfDay(time) {
+  if (!time) return "";
+  if (time.hour < 5) return "ночи";
+  if (time.hour < 12) return "утра";
+  if (time.hour < 18) return "дня";
+  return "вечера";
+}
+
+// Названы дважды одно и то же — время или дату: это точно поправка, а не второе дело.
+function sameKindCorrection(head, tail) {
+  if (head.time && tail.time) return true;
+  return Boolean(head.date && !head.dateInferred && tail.date && !tail.dateInferred);
+}
+
+// Поправка перебивает первую версию, но не стирает то, о чём во второй раз не сказали.
+function mergeCorrection(head, tail) {
+  let date = head.date;
+  let dateInferred = head.dateInferred;
+  if (tail.date && !tail.dateInferred) {
+    date = tail.date;
+    dateInferred = false;
+  } else if (tail.date && (!date || (tail.time && dateInferred))) {
+    date = tail.date;
+    dateInferred = tail.dateInferred;
+  }
+  return {
+    date,
+    dateInferred,
+    time: tail.time || head.time,
+    remindOverride: tail.remindOverride != null ? tail.remindOverride : head.remindOverride,
+    repeat: tail.repeat || head.repeat,
+    timer: tail.timer || head.timer,
+    atMoment: tail.atMoment || head.atMoment,
+    rest: head.rest,
+  };
+}
+
+// Товары без глагола «купить»: Алиса так кладёт в список покупок.
+const GROCERY_RE = new RegExp(
+  `${NBL}(?:молоко|хлеб|батон|яйц(?:а|о)|сыр(?:а|у)?|масло|сметан|кефир|творог|йогурт`
+  + `|колбас|сосиск|овощ(?:и|ей)|фрукт(?:ы|ов)|яблок|банан|огурц|помидор|карт(?:ошк|офел)`
+  + `|гречк|макарон|мук[аиуе]|сахар|соль|кофе|чай${NB}|сок${NB}|вода питьев`
+  + `|подгузник|салфетк|стиральн|порошок|мыло|шампунь|зубн(?:ая|ую)\\s+паст`
+  + `|корм\\s+(?:кот|кошк|собак|питомц))`,
+  "iu",
+);
+const COOK_RE = new RegExp(
+  `${NBL}(?:приготов(?:ить|ь)|свар(?:ить|и)|пожарь|пожарить|испеч(?:ь|и)|запеч(?:ь|и)`
+  + `|разогре(?:ть|й)|потуш(?:ить|и)|нареж(?:ать|ь)|почисти)`,
+  "iu",
+);
+
+/**
+ * Полка как у Алисы: несколько узких интентов, побеждает больший вес.
+ * Явная «в заметки» сильнее «купить» внутри той же фразы.
+ */
+export function classifyKind(chunk) {
+  const text = normalize(chunk);
+  const hits = [];
+  const add = (type, score) => {
+    if (!type || score <= 0) return;
+    hits.push({ type, score });
+  };
+  if (BIRTHDAY_RE.test(text)) add("bday", 100);
+  if (NOTE_FORCE_RE.test(text) || NOTE_RE.test(text)) add("note", 96);
+  if (ALARM_RE.test(text)) add("alarm", 95);
+  if (MEETING_RE.test(text)) add("meeting", 90);
+  if (CARE_RE.test(text)) add("care", 88);
+  if (SPORT_RE.test(text)) add("sport", 88);
+  if (BUY_RE.test(text)) add("buy", 92);
+  else if (GROCERY_RE.test(text) && !COOK_RE.test(text) && !NOTE_FORCE_RE.test(text)) add("buy", 72);
+  // Счётчики выше платежей по весу: «передать показания» должно уходить
+  // на свою полку, а не в оплаты.
+  if (METERS_RE.test(text)) add("meters", 90);
+  if (BILLS_RE.test(text)) add("bills", 88);
+  if (HEALTH_RE.test(text)) add("health", 86);
+  // Последняя подсказка: обычный глагол действия. Только когда молчат все словари полок,
+  // иначе «заехать в магазин» увело бы покупки в дела.
+  if (!hits.length && TASK_VERB_RE.test(text)) add("task", 82);
+  hits.sort((a, b) => b.score - a.score || a.type.localeCompare(b.type));
+  const best = hits[0];
+  return {
+    type: best ? best.type : "task",
+    score: best ? best.score : 20,
+    hits,
+  };
+}
+
+function typeOf(chunk) {
+  return classifyKind(chunk).type;
+}
+
+// Курс лечения: сколько приёмов в день и сколько дней он длится.
+function matchCourse(text) {
+  const low = normalize(text);
+  const perDayHit = low.match(COURSE_PER_DAY_RE);
+  if (!perDayHit) return null;
+  const perDayRaw = perDayHit[1];
+  const perDay = /^\d+$/.test(perDayRaw) ? Number(perDayRaw) : wordNumber(perDayRaw);
+  if (!Number.isInteger(perDay) || perDay < 1 || perDay > 6) return null;
+
+  // Длительность ищем в остатке фразы, иначе «3 раза в день» само себя посчитает днями.
+  const rest = low.slice(0, perDayHit.index) + " " + low.slice(perDayHit.index + perDayHit[0].length);
+  const daysHit = rest.match(COURSE_DAYS_RE);
+  let days = 0;
+  if (daysHit) {
+    const raw = daysHit[1];
+    const value = /^\d+$/.test(raw) ? Number(raw) : wordNumber(raw);
+    if (Number.isInteger(value) && value > 0) {
+      if (/^недел/.test(daysHit[2])) days = value * 7;
+      else if (/^месяц/.test(daysHit[2])) days = value * 30;
+      else days = value;
+    }
+  }
+  if (!days) return null;
+  return { perDay, days: Math.min(days, 180) };
+}
+
+// Часы приёма по числу раз в день: утро, день, вечер — как обычно пишут в назначении.
+const COURSE_HOURS = {
+  1: [9],
+  2: [9, 21],
+  3: [9, 14, 21],
+  4: [8, 12, 16, 20],
+  5: [8, 11, 14, 17, 20],
+  6: [8, 10, 13, 15, 18, 21],
+};
+
+export function courseHours(perDay) {
+  return COURSE_HOURS[perDay] || COURSE_HOURS[3];
+}
+
+function defaultRemind(type, settings) {
+  if (type === "bday") return Number.isFinite(settings?.remindBirthday) ? settings.remindBirthday : 1440;
+  if (type === "meeting") return Number.isFinite(settings?.remindMeeting) ? settings.remindMeeting : 15;
+  // Платежи и счётчики: напоминаем за сутки. Показания передают в срок,
+  // и узнать об этом в последний час бесполезно.
+  if (type === "meters") {
+    return Number.isFinite(settings?.remindMeters) ? settings.remindMeters : 1440;
+  }
+  if (type === "bills") {
+    return Number.isFinite(settings?.remindBills) ? settings.remindBills : SHELF_PROFILES.bills.defaultRemind;
+  }
+  // Протокол ухода и тренировка: сигнал в назначенный момент, без запаса «за 15 минут».
+  if (type === "care" || type === "sport" || type === "health" || type === "alarm") return 0;
+  return Number.isFinite(settings?.remindTask) ? settings.remindTask : 0;
+}
+
+function careDayPart(text) {
+  const low = normalize(text);
+  if (CARE_EVENING_RE.test(low)) return "evening";
+  if (CARE_MORNING_RE.test(low)) return "morning";
+  return null;
+}
+
+function stripCommand(text, re) {
+  return text.replace(re, " ").replace(/\s{2,}/g, " ").trim();
+}
+
+// «перенеси на час позже», «сдвинь на 15 минут», «на полчаса раньше» —
+// это сдвиг от текущего срока записи, а не новое время на часах.
+const SHIFT_PATTERN = `${NBL}на\\s+(\\d{1,3}|полчаса|полтора|полторы|час|сутки|${W}+)\\s*(минут${W}*|мин${NB}|час${W}*|дн${W}*|день|недел${W}*)?\\s*(позже|раньше|вперед|назад)?`;
+
+function matchShift(text) {
+  const re = new RegExp(SHIFT_PATTERN, "giu");
+  const low = normalize(text);
+  let m;
+  while ((m = re.exec(low)) !== null) {
+    const unit = m[2] || "";
+    const dir = m[3] || "";
+    // Без единицы и без «позже/раньше» это обычный перенос на конкретный час.
+    if (!unit && !dir) continue;
+    const rawNum = m[1];
+    let minutes = null;
+    if (rawNum === "полчаса") minutes = 30;
+    else if (/^полтор/.test(rawNum)) minutes = 90;
+    else if (/^час/.test(rawNum)) minutes = 60;
+    else if (/^сутки|^день/.test(rawNum)) minutes = 1440;
+    else {
+      const value = /^\d+$/.test(rawNum) ? Number(rawNum) : wordNumber(rawNum);
+      if (value == null) continue;
+      if (/^час/.test(unit)) minutes = value * 60;
+      else if (/^дн|^день/.test(unit)) minutes = value * 1440;
+      else if (/^недел/.test(unit)) minutes = value * 7 * 1440;
+      else if (/^мин/.test(unit)) minutes = value;
+      else minutes = null;
+    }
+    if (minutes == null) continue;
+    const sign = /раньше|назад/.test(dir) ? -1 : 1;
+    return {
+      minutes: sign * Math.min(minutes, 30 * 1440),
+      dir: Boolean(dir),
+      index: m.index,
+      length: m[0].length,
+    };
+  }
+  // «пораньше» / «попозже» без числа — полчаса.
+  const soft = low.match(new RegExp(`${NBL}(пораньше|попозже|позднее)(?![${L}])`, "iu"));
+  if (soft) {
+    return {
+      minutes: /раньше/i.test(soft[1]) ? -30 : 30,
+      dir: true,
+      index: soft.index,
+      length: soft[0].length,
+    };
+  }
+  return null;
+}
+
+function objectWords(text) {
+  // «запись», «уведомление», «таймер», «заметку» сами по себе — не название дела, а род объекта.
+  return stripCommand(text, /(?:встречу|встреча|встречи|задачу|задача|дело|дела|напоминание|напоминания|уведомление|уведомления|таймер|будильник|запись|события|событие|заметк[ауеи]|заметки|иде[юяи]|мысл[ьи])/giu);
+}
+
+function searchWords(text) {
+  // Пустой результат после очистки — это нормально: человек мог назвать только время.
+  // Нельзя подставлять обратно «запись», иначе она совпадёт с любой записью к врачу.
+  return cleanTitle(objectWords(text)) || "";
+}
+
+// Род записи в команде отмены/правки: по нему выбираем «последний таймер», а не любую запись.
+const TARGET_KINDS = [
+  { kind: "timer", re: new RegExp(`${NBL}таймер(?:а|у|ом|е)?${NB}`, "iu") },
+  { kind: "alarm", re: new RegExp(`${NBL}будильник(?:а|у|ом|е)?${NB}`, "iu") },
+  { kind: "reminder", re: new RegExp(`${NBL}(?:напоминани[еяю]|уведомлени[еяю])${NB}`, "iu") },
+  { kind: "meeting", re: new RegExp(`${NBL}(?:встреч[ауеи]|созвон(?:а|у|ом|е)?)${NB}`, "iu") },
+  { kind: "buy", re: new RegExp(`${NBL}(?:покупк[ауеи]|продукт(?:ы|ов)?)${NB}`, "iu") },
+  { kind: "sport", re: new RegExp(`${NBL}(?:тренировк[ауеи]|спорт)${NB}`, "iu") },
+  { kind: "care", re: new RegExp(`${NBL}(?:уход(?:а|у)?|косметик[ауеи]|протокол(?:а|у)?)${NB}`, "iu") },
+  { kind: "bills", re: new RegExp(`${NBL}(?:платеж(?:а|у|и)?|оплат[ауы]|счет(?:а|у)?)${NB}`, "iu") },
+  { kind: "health", re: new RegExp(`${NBL}(?:лекарств[оа]|таблетк[ауеи]|курс(?:а|у)?|прием(?:а|у)?)${NB}`, "iu") },
+  { kind: "bday", re: new RegExp(`${NBL}(?:день\\s+рождени[яе]|днюх[ау]|годовщин[ау]|др)${NB}`, "iu") },
+  { kind: "task", re: new RegExp(`${NBL}(?:задач[ауеи]|дело|дела)${NB}`, "iu") },
+  { kind: "note", re: new RegExp(`${NBL}заметк[ауеи]${NB}`, "iu") },
+];
+const KIND_TITLE_WORDS = new Set([
+  "таймер", "будильник", "напоминание", "уведомление",
+  "встреча", "созвон", "задача", "дело", "заметка", "запись", "событие",
+  "покупка", "тренировка", "уход", "платеж", "оплата", "лекарство", "таблетка",
+]);
+
+// «последний», «то что сказал», «который ставил до этого» — метки выбора цели.
+const TARGET_LAST_SRC = `${NBL}(?:самы[йе]\\s+)?последн(?:ий|юю|ее|ие|им|ую)${NB}`;
+const TARGET_SAID_SRC = `${NBL}(?:то\\s+что\\s+(?:я\\s+)?сказал[аи]?|что\\s+я\\s+сказал[аи]?)${NB}`;
+const TARGET_PREV_SRC = `${NBL}(?:котор(?:ый|ую|ое|ые)\\s+(?:я\\s+)?(?:ставил[аи]?|поставил[аи]?|создал[аи]?|добавлял[аи]?)(?:\\s+до\\s+этого)?|до\\s+этого)${NB}`;
+
+function stripMarkerSrc(text, source) {
+  return String(text || "").replace(new RegExp(source, "giu"), " ").replace(/\s{2,}/g, " ").trim();
+}
+
+function hasMarkerSrc(text, source) {
+  return new RegExp(source, "iu").test(text);
+}
+
+// Снимаем метки «последний / то что сказал», тип оставляем — он ещё нужен extractWhen («таймер на 10 мин»).
+function peelTargetMarkers(text) {
+  let rest = String(text || "").replace(/\s+/g, " ").trim();
+  const target = { last: false, saidLast: false, kind: null };
+
+  if (hasMarkerSrc(rest, TARGET_SAID_SRC)) {
+    target.saidLast = true;
+    target.last = true;
+    rest = stripMarkerSrc(rest, TARGET_SAID_SRC);
+  }
+  if (hasMarkerSrc(rest, TARGET_PREV_SRC)) {
+    target.last = true;
+    rest = stripMarkerSrc(rest, TARGET_PREV_SRC);
+  }
+  if (hasMarkerSrc(rest, TARGET_LAST_SRC)) {
+    target.last = true;
+    rest = stripMarkerSrc(rest, TARGET_LAST_SRC);
+  }
+
+  for (const entry of TARGET_KINDS) {
+    if (entry.re.test(rest)) {
+      target.kind = entry.kind;
+      break;
+    }
+  }
+  return { target, rest };
+}
+
+export function itemMatchesKind(item, kind) {
+  if (!item || !kind) return false;
+  if (kind === "timer") return Boolean(item.timer);
+  if (kind === "alarm") return item.type === "alarm" || item.shelf === "alarms";
+  if (kind === "meeting") return item.type === "meeting" || item.shelf === "meetings";
+  if (kind === "buy") return item.type === "buy" || item.shelf === "buy";
+  if (kind === "sport") return item.type === "sport" || item.shelf === "sport";
+  if (kind === "care") return item.type === "care" || item.shelf === "care";
+  if (kind === "bills") return item.type === "bills" || item.shelf === "bills";
+  if (kind === "health") return item.type === "health" || item.shelf === "health";
+  if (kind === "bday") return item.type === "bday" || item.shelf === "bday";
+  if (kind === "task") return (item.type === "task" || item.shelf === "tasks") && !item.timer;
+  if (kind === "note") return item.type === "note" || item.shelf === "notes";
+  if (kind === "reminder") {
+    // Напоминание — любая активная запись со сроком, кроме будильника и таймера.
+    return !item.timer && item.type !== "alarm" && Boolean(item.date || item.time);
+  }
+  return false;
+}
+
+function byCreatedDesc(a, b) {
+  return (b.createdAt || b.updatedAt || 0) - (a.createdAt || a.updatedAt || 0);
+}
+
+// Выбор цели для cancel/move по меткам: точное название → last+kind → last overall.
+// null — сервер продолжит старый поиск по словам и времени.
+export function resolveCaptureTarget(pool, result) {
+  const list = Array.isArray(pool) ? pool : [];
+  const target = result?.target || {};
+  const place = String(result?.place || result?.slots?.place || "").trim();
+  const query = String(result?.query || "").trim();
+  const rawQuery = String(result?.rawQuery || "").trim();
+  const scoreQuery = [query, place, rawQuery].filter(Boolean).join(" ").trim();
+
+  const exactQueries = [...new Set(
+    [query, place, rawQuery, searchWords(rawQuery)]
+      .map(q => normalizeTitle(q))
+      .filter(q => q && q.length >= 2),
+  )];
+
+  for (const q of exactQueries) {
+    // Слово-род («таймер») само по себе названием не считаем — иначе перебьёт last+kind.
+    if (KIND_TITLE_WORDS.has(q)) continue;
+
+    let hits = list.filter(i => normalizeTitle(i.title) === q);
+    if (!hits.length) continue;
+    if (target.kind) {
+      const ofKind = hits.filter(i => itemMatchesKind(i, target.kind));
+      if (ofKind.length) hits = ofKind;
+    }
+    if (hits.length === 1) return { mode: "exact", items: hits };
+    if (target.last || target.saidLast) {
+      hits = [...hits].sort(byCreatedDesc);
+      return { mode: "exact", items: [hits[0]] };
+    }
+    return { mode: "exact", items: hits };
+  }
+
+  if (target.saidLast) {
+    const sorted = [...list].sort(byCreatedDesc);
+    return sorted.length ? { mode: "last", items: [sorted[0]] } : { mode: "last", items: [] };
+  }
+
+  if (target.kind) {
+    const ofKind = list.filter(i => itemMatchesKind(i, target.kind));
+    if (!ofKind.length) return { mode: "last_kind", items: [] };
+
+    // «удали последний таймер» — без вариантов берём самый свежий этого рода.
+    if (target.last) {
+      const sorted = [...ofKind].sort(byCreatedDesc);
+      return { mode: "last_kind", items: [sorted[0]] };
+    }
+
+    // «перенеси созвон…» / «отмени встречу на Таганке» — ищем по словам и слоту place.
+    const scored = ofKind
+      .map(i => ({ item: i, score: scoreMatch(i, scoreQuery) }))
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score || byCreatedDesc(a.item, b.item));
+    if (scored.length) {
+      const best = scored[0].score;
+      const tops = scored.filter(x => x.score === best).map(x => x.item);
+      // Несколько одинаковых («две встречи на Тимирязевской») — берём самую свежую.
+      if (tops.length > 1) {
+        tops.sort(byCreatedDesc);
+        return { mode: "query", items: [tops[0]] };
+      }
+      return { mode: "query", items: tops };
+    }
+
+    // Только место назвали — ищем по place / title среди рода.
+    if (place) {
+      const byPlace = ofKind
+        .filter(i => scoreMatch(i, place) > 0)
+        .sort(byCreatedDesc);
+      if (byPlace.length) return { mode: "query", items: [byPlace[0]] };
+    }
+
+    // «удали таймер» без названия и без совпадений по словам — последний этого рода.
+    if (!query && !place) {
+      const sorted = [...ofKind].sort(byCreatedDesc);
+      return { mode: "last_kind", items: [sorted[0]] };
+    }
+    return { mode: "last_kind", items: [] };
+  }
+
+  if (target.last && !query && !place) {
+    const sorted = [...list].sort(byCreatedDesc);
+    return sorted.length ? { mode: "last", items: [sorted[0]] } : { mode: "last", items: [] };
+  }
+
+  return null;
+}
+
+function parseEditIntent(clean, intent, ctx) {
+  const verbRe = intent === "cancel" ? CANCEL_RE : MOVE_RE;
+  let asked = stripCommand(clean, verbRe);
+  if (intent === "move") {
+    // «внеси изменения в заметку…» → после среза глагола остаётся «изменения в …».
+    asked = stripCommand(asked, EDIT_LEFTOVER_RE);
+    asked = asked.replace(/^(?:прошу|пожалуйста|давай|ну)\s+/iu, "").trim();
+    // «…и поставь её на 11» — хвост команды, не часть названия/места.
+    asked = asked.replace(/\s+и\s+(?:поставь|поставить|сделай|сделать)\s+(?:е[её]|его|это|её)?\s*/iu, " ").trim();
+    asked = asked.replace(/\s+(?:поставь|поставить)\s+(?:е[её]|его|это)?\s*/iu, " ").trim();
+    asked = asked.replace(/^(?:в|к|для)\s+/iu, "").trim();
+  }
+  let fix = null;
+  if (intent === "move") {
+    fix = splitCorrection(asked);
+    if (fix && fix.negated) {
+      asked = `${fix.head} ${fix.tail}`.trim();
+      fix = null;
+    }
+  }
+
+  const peeled = peelTargetMarkers(fix ? fix.head : asked);
+  let working = peeled.rest;
+  working = working.replace(/^(?:в|к|для)\s+/iu, "").trim();
+  let shift = null;
+  if (intent === "move") {
+    shift = matchShift(working);
+    // Без «позже/раньше» «на 10 минут» у таймера — новый отсчёт, не сдвиг.
+    const allowShift = shift && (shift.dir || RELATIVE_MOVE_RE.test(clean) || !peeled.target.kind);
+    if (shift && allowShift) working = cutRange(working, shift.index, shift.length);
+    else shift = null;
+  }
+
+  let when = extractWhen(working, ctx);
+  if (intent === "move" && fix) {
+    const tailPeeled = peelTargetMarkers(fix.tail);
+    const tail = extractWhen(tailPeeled.rest, ctx, { modHint: halfOfDay(when.time) });
+    if (tail.time || (tail.date && !tail.dateInferred)) when = mergeCorrection(when, tail);
+  }
+
+  // «поменяй … на 10 мин» без слова «таймер» в остатке — всё равно длительность отсчёта.
+  if (intent === "move" && !when.timer && !when.time && peeled.target.kind === "timer") {
+    const dur = firstMatch(normalize(working), new Uint8Array(working.length),
+      `${NBL}(?:на\\s+)?(\\d{1,3}|полчаса|${W}+)\\s*(секунд${W}*|сек${NB}|минут${W}*|мин${NB}|час${W}*)${NB}`);
+    if (dur) {
+      const rawNum = dur[1];
+      const unit = dur[2] || "";
+      let ms = null;
+      if (rawNum === "полчаса") ms = 30 * 60000;
+      else if (/^час/.test(rawNum)) ms = 3600000;
+      else {
+        const value = /^\d+$/.test(rawNum) ? Number(rawNum) : wordNumber(rawNum);
+        if (value != null && value > 0) {
+          if (/^час/.test(unit)) ms = value * 3600000;
+          else if (/^сек/.test(unit)) ms = value * 1000;
+          else ms = value * 60000;
+        }
+      }
+      if (ms != null) {
+        const target = zonedParts(ctx.now + ms, ctx.tz);
+        when = {
+          ...when,
+          date: { year: target.year, month: target.month, day: target.day },
+          time: { hour: target.hour, minute: target.minute, second: target.second },
+          timer: true,
+          dateInferred: false,
+        };
+      }
+    }
+  }
+
+  const placeHit = matchPlace(when.rest);
+  const place = placeHit ? placeHit.value : "";
+  let restForQuery = when.rest;
+  if (placeHit) restForQuery = cutRange(when.rest, placeHit.index, placeHit.length);
+  const whoHit = extractWho(restForQuery);
+  const who = whoHit ? whoHit.value : "";
+  if (whoHit) restForQuery = cutRange(restForQuery, whoHit.index, whoHit.length);
+  const query = searchWords(restForQuery) || searchWords(when.rest);
+  // Место — отдельный слот и часть поиска цели («встреча на Тимирязевской»).
+  const queryWithPlace = [query, place, who].filter(Boolean).join(" ").trim();
+
+  // «без будильника» / «с будильником» / «только пуш»
+  const lowAsked = normalize(asked);
+  let alarmFlag = null;
+  let pushFlag = null;
+  if (/(?:без\s+будильник|выключ\w*\s+будильник|только\s+пуш|без\s+сигнал)/u.test(lowAsked)) {
+    alarmFlag = false;
+  } else if (/(?:с\s+будильник|включ\w*\s+будильник|громк\w*\s+сигнал)/u.test(lowAsked)) {
+    alarmFlag = true;
+  }
+  if (/только\s+пуш/u.test(lowAsked)) pushFlag = true;
+
+  const result = {
+    intent,
+    query: queryWithPlace || query,
+    rawQuery: when.rest.trim(),
+    date: when.dateInferred ? null : when.date,
+    time: when.time || null,
+    place,
+    who,
+    shift: shift ? shift.minutes : null,
+    timer: Boolean(when.timer),
+    alarm: alarmFlag,
+    push: pushFlag,
+    target: peeled.target,
+    drafts: [],
+  };
+  result.slots = slotsFromEdit(result);
+  return result;
+}
+
+/** Определить действие фразы — шаг 1 пайплайна NLU. */
+export function detectIntent(text) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "empty";
+  if (CANCEL_RE.test(clean) && !ALREADY_CANCELLED_RE.test(clean)) return "cancel";
+  // Команда правки — в начале фразы (после «прошу/пожалуйста»), не в середине дела.
+  const head = clean
+    .replace(/^(?:прошу|пожалуйста|слушай|ну|давай(?:те)?)\s+/iu, "")
+    .split(/\s+/)
+    .slice(0, 5)
+    .join(" ");
+  if (MOVE_RE.test(head)) return "move";
+  return "create";
+}
+
+function slotsFromEdit(result) {
+  const kind = result.target?.kind || null;
+  const shelf = kind && SHELF_PROFILES[kind === "meeting" ? "meetings" : kind === "task" ? "tasks" : kind === "note" ? "notes" : kind]
+    ? (kind === "meeting" ? "meetings" : kind === "task" ? "tasks" : kind === "note" ? "notes" : kind === "alarm" ? "alarms" : kind)
+    : null;
+  return {
+    intent: result.intent,
+    title: result.query || "",
+    date: result.date || null,
+    time: result.time || null,
+    place: result.place || "",
+    who: result.who || "",
+    kind,
+    shelf,
+    shelfLabel: shelf ? SHELF_PROFILES[shelf]?.label || null : null,
+    target: result.target || null,
+    shift: result.shift ?? null,
+    timer: Boolean(result.timer),
+    alarm: result.alarm,
+    push: result.push,
+    remind: null,
+    repeat: null,
+  };
+}
+
+function slotsFromDraft(draft, intent = "create") {
+  const type = draft?.type || null;
+  const shelf = type ? shelfFor({ ...draft, type }, {}) : null;
+  const profile = shelf ? SHELF_PROFILES[shelf] : null;
+  return {
+    intent,
+    title: draft?.title || "",
+    date: draft?.date || null,
+    time: draft?.time || null,
+    place: draft?.place || "",
+    who: draft?.who || "",
+    kind: type,
+    shelf: shelf || null,
+    shelfLabel: profile?.label || null,
+    target: null,
+    shift: null,
+    timer: Boolean(draft?.timer),
+    alarm: draft?.alarm,
+    push: draft?.push,
+    remind: draft?.remindExplicit ? draft.remind : null,
+    repeat: draft?.repeat || null,
+    course: draft?.course || null,
+    carePart: draft?.carePart || null,
+    yearly: Boolean(draft?.yearly),
+  };
+}
+
+/** Политика полки: дефолты слотов после определения типа. */
+function applyShelfPolicy(draft, base, when, ctx, settings) {
+  const hasTime = Boolean(draft.time);
+  if (draft.type === "alarm") {
+    draft.needsTime = !hasTime;
+    draft.remind = 0;
+    draft.remindExplicit = true;
+    draft.alarm = true;
+    // Будильник срабатывает один раз, если не просили иначе.
+    //
+    // Раньше любой будильник становился ежедневным: человек говорил
+    // «поставь на 7», просыпался от него неделю и шёл искать, как выключить.
+    // Ежедневный ставится словами — «каждый день», «по будням», «ежедневно»,
+    // и тогда repeat приходит из разбора фразы.
+    if (hasTime && !draft.date) {
+      const nowParts = zonedParts(ctx.now, ctx.tz);
+      const due = draft.time.hour * 60 + draft.time.minute;
+      const nowMins = nowParts.hour * 60 + nowParts.minute;
+      draft.date = due <= nowMins
+        ? addDays(nowParts, 1)
+        : { year: nowParts.year, month: nowParts.month, day: nowParts.day };
+    }
+  }
+  if (draft.type === "health") {
+    const course = matchCourse(base);
+    if (course) {
+      draft.course = course;
+      draft.repeat = draft.repeat || { kind: "daily" };
+      draft.needsTime = false;
+      draft.remind = 0;
+      draft.remindExplicit = true;
+      if (!draft.date) {
+        const nowParts = zonedParts(ctx.now, ctx.tz);
+        draft.date = { year: nowParts.year, month: nowParts.month, day: nowParts.day };
+      }
+    }
+  }
+  if (draft.type === "bday") {
+    draft.yearly = true;
+    if (!draft.time) {
+      draft.time = { hour: 9, minute: 0 };
+      draft.needsTime = false;
+    }
+  }
+  if (draft.type === "care") {
+    const part = careDayPart(base);
+    if (part) draft.carePart = part;
+    if (part) {
+      if (!draft.repeat) draft.repeat = { kind: "daily" };
+      if (!draft.time) {
+        draft.time = part === "morning" ? { hour: 8, minute: 0 } : { hour: 21, minute: 0 };
+        draft.needsTime = false;
+      }
+      draft.remind = 0;
+      draft.remindExplicit = true;
+      if (!draft.date) {
+        const nowParts = zonedParts(ctx.now, ctx.tz);
+        const due = draft.time.hour * 60 + draft.time.minute;
+        const nowMins = nowParts.hour * 60 + nowParts.minute;
+        draft.date = due <= nowMins
+          ? addDays(nowParts, 1)
+          : { year: nowParts.year, month: nowParts.month, day: nowParts.day };
+      }
+    }
+  }
+  if (draft.type === "bills") {
+    draft.needsTime = false;
+    // Без явного «за N» — за сутки до даты платежа.
+    if (!remindExplicit(when) && draft.date && !draft.timer) {
+      draft.remind = defaultRemind("bills", settings);
+      draft.remindExplicit = true;
+    }
+  }
+  if (draft.type === "buy" || draft.type === "note") {
+    draft.needsTime = false;
+  }
+  if (draft.type === "sport") {
+    draft.needsTime = !hasTime ? false : draft.needsTime;
+    if (!remindExplicit(when)) {
+      draft.remind = 0;
+      draft.remindExplicit = true;
+    }
+  }
+  return draft;
+}
+
+/** Склейки и огрехи STT до синонимов. */
+function fixSttGlitches(text) {
+  return String(text || "")
+    .replace(/со\s+звон/giu, "созвон")
+    .replace(/бу\s+дильник/giu, "будильник")
+    .replace(/за\s+метк/giu, "заметк")
+    .replace(/замет\s+к/giu, "заметк")
+    .replace(/на\s+поминал/giu, "напоминал")
+    .replace(/на\s+поминани/giu, "напоминани")
+    .replace(/напомин[еи]\b/giu, "напомни")
+    .replace(/за\s*втра\b/giu, "завтра")
+    .replace(/\bзавтр[ое]\b/giu, "завтра")
+    .replace(/\bтимер\b/giu, "таймер")
+    .replace(/\bтамер\b/giu, "таймер")
+    .replace(/\bтайме\b/giu, "таймер")
+    .replace(/\bвстречю\b/giu, "встречу")
+    .replace(/\bкупит\b/giu, "купить")
+    .replace(/\bприготовить\s+курица\b/giu, "приготовить курицу")
+    .replace(/перенси/giu, "перенеси")
+    .replace(/удаи\b/giu, "удали")
+    .replace(/(?<![а-яa-z0-9])(в|к|на)(\d{1,2})(час)/giu, "$1 $2 $3");
+}
+
+/** Синонимы «как леммы» у ассистента — одна сущность, разные формулировки. */
+function applySynonyms(text) {
+  let t = fixSttGlitches(text);
+  const pairs = [
+    [/созвонимся|созвониться|созвончик/giu, "созвон"],
+    [/переговор(?:ы|ов|ах)?/giu, "встреча"],
+    [/митинга?/giu, "митинг"],
+    [/закупиться|закупить|прикупить|приобрести/giu, "купить"],
+    [/натренироваться|потренироваться/giu, "тренировка"],
+    [/заплатить|оплатить/giu, "оплатить"],
+    [/лекарство|таблетки/giu, "лекарство"],
+    [/напоминалк[ауие]/giu, "напоминание"],
+    [/(?:пингни|дерни)(?:\s+меня)?/giu, "напомни"],
+    [/зафиксируй|зафиксировать/giu, "запиши"],
+    [/(?:в\s+)?(?:тимс(?:е|а|у)?|teams|гугл\s*мит|google\s*meet|meet|телемост(?:е|а|у)?)/giu, "созвон"],
+  ];
+  for (const [re, to] of pairs) t = t.replace(re, to);
+  return t.replace(/\s+/g, " ").trim();
+}
+
+const PHONE_LABELED_RE = new RegExp(
+  `(?:тел(?:ефон)?|номер|звон(?:и|ить)?)\\s*[:\\-]?\\s*([+\\d][\\d\\s\\-()]{8,}\\d)`,
+  "iu",
+);
+const PHONE_NUM_RE = /(?:\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/u;
+
+function formatPhoneRaw(raw) {
+  const digits = String(raw || "").replace(/\D/g, "");
+  if (digits.length < 10) return "";
+  if (digits.length === 11 && digits.startsWith("8")) {
+    return `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
+  }
+  if (digits.length === 11 && digits.startsWith("7")) {
+    return `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
+  }
+  if (digits.length === 10) {
+    return `+7 ${digits.slice(0, 3)} ${digits.slice(3, 6)}-${digits.slice(6, 8)}-${digits.slice(8, 10)}`;
+  }
+  return String(raw || "").trim().slice(0, 32);
+}
+
+/** Слот phone: «телефон 8 900 …», «+7 (900) 123-45-67». */
+export function extractPhone(text) {
+  const s = String(text || "");
+  const labeled = s.match(PHONE_LABELED_RE);
+  if (labeled) {
+    const value = formatPhoneRaw(labeled[1]);
+    if (value) {
+      return { value, index: labeled.index, length: labeled[0].length };
+    }
+  }
+  const num = s.match(PHONE_NUM_RE);
+  if (num) {
+    const value = formatPhoneRaw(num[0]);
+    if (value) {
+      return { value, index: num.index, length: num[0].length };
+    }
+  }
+  return null;
+}
+
+/** Слот who: «с Андреем», «клиент Иван Петров». */
+export function extractWho(text) {
+  const raw = String(text || "");
+  const client = raw.match(new RegExp(`${NBL}клиент(?:а|у|ом)?\\s+([А-ЯЁа-яё]+(?:\\s+[А-ЯЁа-яё]+){0,2})`, "iu"));
+  if (client) {
+    return {
+      value: capitalize(client[1].trim()),
+      index: client.index,
+      length: client[0].length,
+      role: "client",
+    };
+  }
+  // \b в JS не работает с кириллицей — граница через пробел/конец/знак.
+  const withWho = raw.match(/(?:^|\s)(?:с|со)\s+([А-ЯЁ][а-яё]{2,}(?:ом|ой|ым|ей|у|а)?)(?=\s|$|[.,!?…])/u);
+  if (withWho) {
+    let name = withWho[1];
+    // Не путать «с клиентом/банком/врачом» с именем человека.
+    if (/^(?:клиент|банк|врач|мамой|папой|женой|мужем|коллег|друг|подруг)/iu.test(name)) {
+      return null;
+    }
+    // «с Андреем» → Андрей (грубо, для слота).
+    name = name.replace(/(ом|ым|ой|ей|у|а)$/u, match => {
+      if (match === "ом" || match === "ым") return "";
+      if (match === "ой" || match === "ей") return "а";
+      if (match === "у") return "";
+      return match;
+    });
+    if (name.length < 2) name = withWho[1];
+    return {
+      value: capitalize(name),
+      index: withWho.index,
+      length: withWho[0].length,
+      role: "person",
+    };
+  }
+  return null;
+}
+
+export function parse(text, ctx) {
+  const clean = applySynonyms(String(text || "").replace(/\s+/g, " ").trim());
+  if (!clean) return { intent: "empty", drafts: [], slots: slotsFromDraft(null, "empty") };
+
+  const settings = ctx.settings || {};
+  const intent = detectIntent(clean);
+
+  if (intent === "cancel") {
+    return parseEditIntent(clean, "cancel", ctx);
+  }
+
+  if (intent === "move") {
+    return parseEditIntent(clean, "move", ctx);
+  }
+
+  const drafts = [];
+  for (const chunk of splitChunks(clean)) {
+    const fix = splitCorrection(chunk);
+    let base = chunk;
+    let when = extractWhen(chunk, ctx);
+    // Пустой rest — валидный результат (вся фраза ушла в дату/время). Нельзя || chunk.
+    let restText = when.rest == null ? chunk : when.rest;
+    let corrected = false;
+
+    if (fix && fix.negated) {
+      base = `${fix.head} ${fix.tail}`.trim();
+      when = extractWhen(base, ctx);
+      restText = when.rest == null ? base : when.rest;
+      corrected = true;
+    } else if (fix) {
+      const head = extractWhen(fix.head, ctx);
+      const tail = extractWhen(fix.tail, ctx, { modHint: halfOfDay(head.time) });
+      const tailPlace = matchPlace(tail.rest || fix.tail);
+      const leftover = tailPlace ? cutRange(tail.rest, tailPlace.index, tailPlace.length) : tail.rest;
+      const onlyWhen = onlyFillerWords(leftover);
+      if (onlyWhen && (tail.time || (tail.date && !tail.dateInferred) || tailPlace)) {
+        corrected = true;
+        base = fix.head;
+        when = mergeCorrection(head, tail);
+        restText = when.rest == null ? fix.head : when.rest;
+        if (tailPlace) {
+          const old = matchPlace(restText);
+          if (old) restText = cutRange(restText, old.index, old.length);
+          restText = `${restText} ${tail.rest}`.trim();
+        }
+      } else if (sameKindCorrection(head, tail)) {
+        // «на пятницу, тьфу, на субботу поездку»: у одного дела не бывает двух дат,
+        // значит это поправка, даже если во второй половине есть и другие слова.
+        corrected = true;
+        base = `${fix.head} ${fix.tail}`.trim();
+        when = mergeCorrection(head, tail);
+        restText = `${when.rest || ""} ${tail.rest || ""}`.trim();
+      }
+    }
+
+    // Таймер — всегда дело со сроком: заметкой он бы не прозвенел.
+    // «поставь будильник» — отдельный тип: всегда громкий сигнал, не тихий пуш.
+    const wantsClockAlarm = !when.timer && ALARM_RE.test(normalize(base));
+    const kindHit = classifyKind(base);
+    const type = when.timer ? "task" : wantsClockAlarm ? "alarm" : kindHit.type;
+    // «в заметки / положи в заметки» — полка, не место и не кусок названия.
+    restText = restText.replace(NOTE_SHELF_PHRASE, " ").replace(/\s{2,}/g, " ").trim();
+    // Остаток после даты/времени — безопасный источник названия (без «завтра в 10»).
+    const titleSeed = restText;
+    // Слот place вырезаем из текста до названия — иначе «на Ти…» остаётся в title.
+    let place = "";
+    if (type !== "bday" && type !== "alarm" && type !== "note") {
+      const placeHit = matchPlace(restText);
+      if (placeHit) {
+        place = placeHit.value;
+        restText = cutRange(restText, placeHit.index, placeHit.length);
+      }
+    } else if (type === "note") {
+      // У заметки место только если это настоящее («в банке»), не полка.
+      const placeHit = matchPlace(restText);
+      if (placeHit && !isPlaceStop(placeHit.value)) {
+        place = placeHit.value;
+        restText = cutRange(restText, placeHit.index, placeHit.length);
+      }
+    }
+    // Слот who: «с Андреем», «клиент Иван» — отдельно от названия.
+    let who = "";
+    const whoHit = extractWho(restText) || extractWho(base);
+    if (whoHit) {
+      who = whoHit.value;
+      // Из restTitle убираем, если фрагмент ещё там.
+      if (restText.includes(whoHit.value) || new RegExp(whoHit.value, "i").test(restText)) {
+        const again = extractWho(restText);
+        if (again) restText = cutRange(restText, again.index, again.length);
+      }
+    }
+    let phone = "";
+    const phoneHit = extractPhone(restText) || extractPhone(base);
+    if (phoneHit) {
+      phone = phoneHit.value;
+      restText = cutRange(restText, phoneHit.index, phoneHit.length);
+    }
+    const hasTime = Boolean(when.time);
+    // Дело без часа → заметка на день (в т.ч. «напомни завтра приготовить курицу»).
+    // Время потом ставят барабанами в календаре. Встречи/покупки/спорт — свои типы.
+    // Дело без времени остаётся делом.
+    //
+    // Раньше оно превращалось в заметку: «позвонить маме» уезжало в notes,
+    // и человек не понимал, куда делось дело. Заметка — это мысль на память,
+    // а дело нужно сделать, даже если час не назначен.
+    const finalType = type;
+    // Название: сначала после who/place; если слоты съели всё — вернёмся к titleSeed
+    // (уже без даты/времени). Сырой base нельзя — снова всплывут «на 10 минут».
+    let title = cleanTitle(restText);
+    if (isWeakTitle(title)) title = cleanTitle(titleSeed);
+    if (isWeakTitle(title)) title = "";
+    if (!title && who) {
+      title = finalType === "meeting" ? `Встреча с ${who}` : finalType === "bday" ? who : `Клиент ${who}`;
+    }
+    if (!title) title = defaultItemTitle(when, finalType, base, ctx);
+    // «установи будильник на 7» → «Будильник», не «Установи будильник»; задачи вроде «установить приложение» не трогаем.
+    if ((finalType === "alarm" || when.timer) && /будильник/i.test(normalize(title))) {
+      title = defaultItemTitle(when, finalType, base, ctx);
+    }
+    // Если who вырезали из title, а title стал пустым «Встреча» — вернём с именем.
+    if (who && finalType === "meeting" && /^встреча$/i.test(title.trim())) {
+      title = `Встреча с ${who}`;
+    }
+    const draft = {
+      type: finalType,
+      title,
+      place,
+      who,
+      phone,
+      date: when.date || null,
+      time: when.time || null,
+      // Базово: у заметки/покупки/ухода/спорта/платежа время не обязательно.
+      // Дело без часа не переспрашиваем голосом: запись уже создана на сегодня,
+      // а время человек поставит кнопкой «Во сколько?» в карточке — если захочет.
+      // Переспрашивать имеет смысл только там, где без часа запись бессмысленна:
+      // встреча и будильник.
+      needsTime: !hasTime && ["meeting", "alarm"].includes(finalType),
+      remind: finalType === "alarm" ? 0 : remindFor(finalType === "note" ? "task" : type, when, ctx, settings),
+      remindExplicit: finalType === "alarm" ? true : remindExplicit(when),
+      // Будильник всегда alarm; иначе null — сервер возьмёт настройку закладки.
+      alarm: when.timer || finalType === "alarm" ? true : null,
+      // Таймер — одноразовый отсчёт: после сигнала сразу «исполнен», не «просрочен».
+      timer: Boolean(when.timer),
+      repeat: when.repeat || null,
+      corrected,
+      source: chunk,
+      kindScore: when.timer || wantsClockAlarm ? 95 : kindHit.score,
+    };
+    if (when.yearly) draft.yearly = true;
+    applyShelfPolicy(draft, base, when, ctx, settings);
+    drafts.push(draft);
+  }
+
+  // Сдвиг для эллипсиса: «на полчаса позже», «пораньше» после прошлой записи.
+  const shiftHit = matchShift(clean);
+  return {
+    intent: "create",
+    drafts,
+    shift: shiftHit ? shiftHit.minutes : null,
+    slots: slotsFromDraft(drafts[0], "create"),
+  };
+}
+
+export function shelfFor(item, settings = {}) {
+  const customs = Array.isArray(settings.customShelves) ? settings.customShelves : [];
+  const builtins = new Set(BUILTIN_SHELF_IDS);
+  // Своя полка по словам конструктора — сильнее вшитых типов.
+  const matched = matchCustomShelf(`${item.title || ""} ${item.source || ""}`, customs);
+  if (matched) return matched.id;
+  if (item.shelf && customs.some(c => c.id === item.shelf)) return item.shelf;
+
+  // Тип — источник истины. Старый shelf=tasks у заметки без времени больше не залипает.
+  if (item.type === "alarm") return "alarms";
+  if (item.type === "bday") return "bday";
+  if (item.type === "meeting") return "meetings";
+  if (item.type === "buy") return "buy";
+  if (item.type === "sport") return "sport";
+  if (item.type === "care") return "care";
+  if (item.type === "bills") return "bills";
+  if (item.type === "meters") return "meters";
+  if (item.type === "health") return "health";
+  if (item.type === "note") return "notes";
+  if (item.shelf && builtins.has(item.shelf) && item.shelf !== "today" && item.shelf !== "chat") {
+    return item.shelf;
+  }
+  // Дело без даты — всё равно дело: «позвонить маме» нужно сделать,
+  // а не запомнить. В заметки уходит только то, что явно названо заметкой,
+  // мыслью или идеей — это ловится по типу выше.
+  return "tasks";
+}
+
+// Слова из конструктора полки: если фраза их содержит — запись едет на эту полку.
+// Название полки тоже считается словом — «Дом» ловит «домой заехать».
+export function matchCustomShelf(text, customs = []) {
+  const hay = normalize(String(text || ""));
+  if (!hay) return null;
+  for (const shelf of customs) {
+    const words = [...(shelf.keywords || [])];
+    if (shelf.label) words.push(shelf.label);
+    for (const raw of words) {
+      const kw = normalize(String(raw || "").trim());
+      if (kw.length >= 2 && hay.includes(kw)) return shelf;
+    }
+  }
+  return null;
+}
+
+export function normalizeTitle(text) {
+  return normalize(String(text || "")).replace(/[^а-яa-z0-9 ]/gi, "").replace(/\s+/g, " ").trim();
+}
+
+export function tokens(text) {
+  return normalize(String(text || ""))
+    .split(/[^а-яa-z0-9]+/iu)
+    .filter(w => w.length >= 3)
+    .map(w => w.slice(0, 5));
+}
+
+function stemClose(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // «тимер» ≈ «тимир» (оговорка/STT), «бегов» ≈ «бегово»
+  if (a.length >= 4 && b.length >= 4) {
+    if (a.slice(0, 4) === b.slice(0, 4)) return true;
+    let diff = 0;
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i += 1) if (a[i] !== b[i]) diff += 1;
+    diff += Math.abs(a.length - b.length);
+    if (diff <= 1) return true;
+  }
+  return false;
+}
+
+export function scoreMatch(item, query) {
+  const q = tokens(query);
+  if (!q.length) return 0;
+  const hay = [...tokens(item.title), ...tokens(item.place || "")];
+  let hits = 0;
+  for (const t of q) {
+    if (hay.some(h => h === t || stemClose(h, t))) hits += 1;
+  }
+  return hits / q.length;
+}

@@ -1,0 +1,37 @@
+{
+  "model": "gpt-image-2",
+  "size": "1024x1024",
+  "quality": "high",
+  "results": [
+    {
+      "file": "/Users/valerii/Desktop/saved-1.png",
+      "key": "saved",
+      "bytes": 765609,
+      "ok": true
+    },
+    {
+      "file": "/Users/valerii/Desktop/reminded-1.png",
+      "key": "reminded",
+      "bytes": 769456,
+      "ok": true
+    },
+    {
+      "file": "/Users/valerii/Desktop/unheard-1.png",
+      "key": "unheard",
+      "bytes": 759659,
+      "ok": true
+    },
+    {
+      "file": "/Users/valerii/Desktop/thinking-1.png",
+      "key": "thinking",
+      "bytes": 751175,
+      "ok": true
+    },
+    {
+      "file": "/Users/valerii/Desktop/calm-1.png",
+      "key": "calm",
+      "bytes": 753178,
+      "ok": true
+    }
+  ]
+}

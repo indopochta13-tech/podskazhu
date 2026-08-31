@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tabler: repeat — ежедневные дела -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M17.5,3.5 L20.5,6.5 L17.5,9.5 L17.5,7.5 L7,7.5 C5.34,7.5 4,8.84 4,10.5 L4,12 L2,12 L2,10.5 C2,7.74 4.24,5.5 7,5.5 L17.5,5.5 L17.5,3.5 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6.5,20.5 L3.5,17.5 L6.5,14.5 L6.5,16.5 L17,16.5 C18.66,16.5 20,15.16 20,13.5 L20,12 L22,12 L22,13.5 C22,16.26 19.76,18.5 17,18.5 L6.5,18.5 L6.5,20.5 Z" />
+</vector>

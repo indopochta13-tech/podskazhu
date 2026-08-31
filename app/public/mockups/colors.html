@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SoulVoice · палитры</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      background: #eceeea;
+      color: #1e2823;
+      padding: 28px 18px 64px;
+      line-height: 1.45;
+    }
+    .wrap { max-width: 1080px; margin: 0 auto; }
+    h1 { font-size: 26px; font-weight: 740; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .lead { color: #4d5a53; max-width: 70ch; margin-bottom: 10px; }
+    .why {
+      background: #fff; border: 1px solid #dde3de; border-radius: 16px; padding: 14px 16px;
+      margin: 18px 0 28px; color: #3a4640; font-size: 14px;
+    }
+    .why strong { color: #1e2823; }
+    .grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px;
+    }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: #fff; border: 1px solid #dde3de; border-radius: 22px; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .card.pick { outline: 3px solid #5f8a72; }
+    .phone {
+      height: 280px; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .brand { font-size: 13px; font-weight: 760; }
+    .tabs { display: flex; gap: 6px; }
+    .tab {
+      border-radius: 999px; padding: 5px 10px; font-size: 11px; font-weight: 700;
+      border: 1px solid transparent;
+    }
+    .row {
+      flex: 1; border-radius: 14px; padding: 12px; display: flex; align-items: center; gap: 8px;
+      border: 1px solid transparent;
+    }
+    .row .t { flex: 1; min-width: 0; }
+    .row .when { font-size: 11px; font-weight: 750; }
+    .row .title { font-size: 14px; font-weight: 700; margin-top: 2px; }
+    .row .meta { font-size: 11px; margin-top: 2px; opacity: .75; }
+    .icos { display: flex; gap: 4px; }
+    .ico {
+      width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center;
+      font-size: 13px; font-weight: 700;
+    }
+    .dock {
+      display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 8px; margin-top: auto;
+    }
+    .dock button {
+      border: 0; border-radius: 14px; padding: 10px 6px; font-size: 11px; font-weight: 700;
+    }
+    .meta-card { padding: 14px 16px 16px; border-top: 1px solid #e6ebe7; }
+    .meta-card h2 { font-size: 16px; font-weight: 740; margin-bottom: 4px; }
+    .meta-card p { font-size: 13px; color: #556159; margin-bottom: 10px; }
+    .swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .sw {
+      width: 42px; height: 42px; border-radius: 12px; border: 1px solid rgba(0,0,0,.08);
+      position: relative;
+    }
+    .sw span {
+      position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%);
+      font-size: 9px; color: #6b756f; white-space: nowrap;
+    }
+    .hexes { font-size: 11px; color: #6b756f; font-family: ui-monospace, monospace; line-height: 1.55; }
+    .badge {
+      display: inline-block; font-size: 11px; font-weight: 750; padding: 3px 8px; border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    .footer { margin-top: 28px; font-size: 13px; color: #556159; max-width: 70ch; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Палитры для «SoulVoice»</h1>
+    <p class="lead">
+      Глаз человека наиболее чувствителен к зелёно-жёлтому спектру (~555&nbsp;нм):
+      такие оттенки меньше утомляют и воспринимаются как «безопасно / природа».
+      Для приложения памяти и напоминаний важны приглушённые, сероватые зелёные —
+      они успокаивают сильнее, чем яркий изумруд или кислотный лайм.
+    </p>
+    <div class="why">
+      <strong>Сейчас у нас:</strong> тёмный лесной <code>#3F5C4E</code> на светлом
+      <code>#F4F6F4</code> — уже в правильной семье, но чуть тяжёлый и «сухой».
+      Ниже четыре варианта: какой ближе — тот и берём как единый стиль для приложения, виджета и иконок.
+    </div>
+
+    <div class="grid">
+
+      <!-- A current-ish refined -->
+      <article class="card" data-id="A">
+        <div class="phone" style="background:linear-gradient(165deg,#c5d0c4,#8fa396);">
+          <div style="background:#f4f6f4;border-radius:18px;padding:12px;flex:1;display:flex;flex-direction:column;gap:8px;">
+            <div class="brand" style="color:#1e2823">SoulVoice</div>
+            <div class="tabs">
+              <span class="tab" style="background:#3f5c4e;color:#f4f6f4">Сегодня</span>
+              <span class="tab" style="background:#fff;border-color:#e2e7e3;color:#6b756f">Покупки</span>
+            </div>
+            <div class="row" style="background:#fff;border-color:#e2e7e3">
+              <div class="t">
+                <div class="when" style="color:#3f5c4e">сегодня · 15:00</div>
+                <div class="title">Встреча на Таганке</div>
+                <div class="meta">дело</div>
+              </div>
+              <div class="icos">
+                <div class="ico" style="background:#f3e6e5;color:#8b4a45">⌫</div>
+                <div class="ico" style="background:#e7eee9;color:#3f5c4e">⏰</div>
+                <div class="ico" style="background:#e7eee9;color:#3f5c4e">✎</div>
+              </div>
+            </div>
+            <div class="dock">
+              <button style="background:#fff;color:#6b756f">Покупки</button>
+              <button style="background:#3f5c4e;color:#f4f6f4">Запись</button>
+              <button style="background:#fff;color:#6b756f">Уход</button>
+            </div>
+          </div>
+        </div>
+        <div class="meta-card">
+          <span class="badge" style="background:#e7eee9;color:#3f5c4e">A · Лес (как сейчас, чуть чище)</span>
+          <h2>Тёмный мох</h2>
+          <p>Знакомо и солидно. Хорошо для доверия, чуть меньше «мягкости» и воздуха.</p>
+          <div class="swatches">
+            <div class="sw" style="background:#3f5c4e"><span>accent</span></div>
+            <div class="sw" style="background:#e7eee9"><span>soft</span></div>
+            <div class="sw" style="background:#f4f6f4"><span>screen</span></div>
+            <div class="sw" style="background:#1e2823"><span>ink</span></div>
+            <div class="sw" style="background:#8b4a45"><span>danger</span></div>
+          </div>
+          <div class="hexes">
+            accent #3F5C4E · soft #E7EEE9 · screen #F4F6F4 · ink #1E2823
+          </div>
+        </div>
+      </article>
+
+      <!-- B sage -->
+      <article class="card" data-id="B">
+        <div class="phone" style="background:linear-gradient(165deg,#d5dfc8,#a7b896);">
+          <div style="background:#f7f6f1;border-radius:18px;padding:12px;flex:1;display:flex;flex-direction:column;gap:8px;">
+            <div class="brand" style="color:#243028">SoulVoice</div>
+            <div class="tabs">
+              <span class="tab" style="background:#6f8f6a;color:#f7f6f1">Сегодня</span>
+              <span class="tab" style="background:#fff;border-color:#e3e6dc;color:#6d7468">Покупки</span>
+            </div>
+            <div class="row" style="background:#fff;border-color:#e3e6dc">
+              <div class="t">
+                <div class="when" style="color:#6f8f6a">сегодня · 15:00</div>
+                <div class="title">Встреча на Таганке</div>
+                <div class="meta">дело</div>
+              </div>
+              <div class="icos">
+                <div class="ico" style="background:#f1e7e4;color:#9a5b52">⌫</div>
+                <div class="ico" style="background:#e8efe4;color:#5f7d5b">⏰</div>
+                <div class="ico" style="background:#e8efe4;color:#5f7d5b">✎</div>
+              </div>
+            </div>
+            <div class="dock">
+              <button style="background:#fff;color:#6d7468">Покупки</button>
+              <button style="background:#6f8f6a;color:#f7f6f1">Запись</button>
+              <button style="background:#fff;color:#6d7468">Уход</button>
+            </div>
+          </div>
+        </div>
+        <div class="meta-card">
+          <span class="badge" style="background:#e8efe4;color:#5f7d5b">B · Шалфей · рекомендую</span>
+          <h2>Мягкий sage</h2>
+          <p>Классика wellness: зелёный + серый. Меньше напряжения, больше «выдоха». Лучше притягивает без раздражения.</p>
+          <div class="swatches">
+            <div class="sw" style="background:#6f8f6a"><span>accent</span></div>
+            <div class="sw" style="background:#e8efe4"><span>soft</span></div>
+            <div class="sw" style="background:#f7f6f1"><span>screen</span></div>
+            <div class="sw" style="background:#243028"><span>ink</span></div>
+            <div class="sw" style="background:#9a5b52"><span>danger</span></div>
+          </div>
+          <div class="hexes">
+            accent #6F8F6A · soft #E8EFE4 · screen #F7F6F1 · ink #243028
+          </div>
+        </div>
+      </article>
+
+      <!-- C teal -->
+      <article class="card pick" data-id="C">
+        <div class="phone" style="background:linear-gradient(165deg,#c9d8d4,#7fa39a);">
+          <div style="background:#f3f7f6;border-radius:18px;padding:12px;flex:1;display:flex;flex-direction:column;gap:8px;">
+            <div class="brand" style="color:#1c2a28">SoulVoice</div>
+            <div class="tabs">
+              <span class="tab" style="background:#3d7a72;color:#f3f7f6">Сегодня</span>
+              <span class="tab" style="background:#fff;border-color:#d9e4e1;color:#5f726e">Покупки</span>
+            </div>
+            <div class="row" style="background:#fff;border-color:#d9e4e1">
+              <div class="t">
+                <div class="when" style="color:#3d7a72">сегодня · 15:00</div>
+                <div class="title">Встреча на Таганке</div>
+                <div class="meta">дело</div>
+              </div>
+              <div class="icos">
+                <div class="ico" style="background:#f0e6e5;color:#8f5651">⌫</div>
+                <div class="ico" style="background:#e2efec;color:#3d7a72">⏰</div>
+                <div class="ico" style="background:#e2efec;color:#3d7a72">✎</div>
+              </div>
+            </div>
+            <div class="dock">
+              <button style="background:#fff;color:#5f726e">Покупки</button>
+              <button style="background:#3d7a72;color:#f3f7f6">Запись</button>
+              <button style="background:#fff;color:#5f726e">Уход</button>
+            </div>
+          </div>
+        </div>
+        <div class="meta-card">
+          <span class="badge" style="background:#e2efec;color:#3d7a72">C · Тихий teal</span>
+          <h2>Зелёно-бирюзовый</h2>
+          <p>Спокойствие синего + опора зелёного. Современнее и «чище», чуть прохладнее шалфея.</p>
+          <div class="swatches">
+            <div class="sw" style="background:#3d7a72"><span>accent</span></div>
+            <div class="sw" style="background:#e2efec"><span>soft</span></div>
+            <div class="sw" style="background:#f3f7f6"><span>screen</span></div>
+            <div class="sw" style="background:#1c2a28"><span>ink</span></div>
+            <div class="sw" style="background:#8f5651"><span>danger</span></div>
+          </div>
+          <div class="hexes">
+            accent #3D7A72 · soft #E2EFEC · screen #F3F7F6 · ink #1C2A28
+          </div>
+        </div>
+      </article>
+
+      <!-- D eucalyptus -->
+      <article class="card" data-id="D">
+        <div class="phone" style="background:linear-gradient(165deg,#d2ddd6,#8eaaa0);">
+          <div style="background:#f5f8f6;border-radius:18px;padding:12px;flex:1;display:flex;flex-direction:column;gap:8px;">
+            <div class="brand" style="color:#1f2b26">SoulVoice</div>
+            <div class="tabs">
+              <span class="tab" style="background:#4f7a68;color:#f5f8f6">Сегодня</span>
+              <span class="tab" style="background:#fff;border-color:#dde6e1;color:#65756e">Покупки</span>
+            </div>
+            <div class="row" style="background:#fff;border-color:#dde6e1">
+              <div class="t">
+                <div class="when" style="color:#4f7a68">сегодня · 15:00</div>
+                <div class="title">Встреча на Таганке</div>
+                <div class="meta">дело</div>
+              </div>
+              <div class="icos">
+                <div class="ico" style="background:#f2e7e5;color:#945850">⌫</div>
+                <div class="ico" style="background:#e4eee9;color:#4f7a68">⏰</div>
+                <div class="ico" style="background:#e4eee9;color:#4f7a68">✎</div>
+              </div>
+            </div>
+            <div class="dock">
+              <button style="background:#fff;color:#65756e">Покупки</button>
+              <button style="background:#4f7a68;color:#f5f8f6">Запись</button>
+              <button style="background:#fff;color:#65756e">Уход</button>
+            </div>
+          </div>
+        </div>
+        <div class="meta-card">
+          <span class="badge" style="background:#e4eee9;color:#4f7a68">D · Эвкалипт</span>
+          <h2>Серо-зелёный баланс</h2>
+          <p>Между A и B: глубже шалфея, мягче леса. Хороший «средний» путь, если хотите обновить без резкой смены.</p>
+          <div class="swatches">
+            <div class="sw" style="background:#4f7a68"><span>accent</span></div>
+            <div class="sw" style="background:#e4eee9"><span>soft</span></div>
+            <div class="sw" style="background:#f5f8f6"><span>screen</span></div>
+            <div class="sw" style="background:#1f2b26"><span>ink</span></div>
+            <div class="sw" style="background:#945850"><span>danger</span></div>
+          </div>
+          <div class="hexes">
+            accent #4F7A68 · soft #E4EEE9 · screen #F5F8F6 · ink #1F2B26
+          </div>
+        </div>
+      </article>
+    </div>
+
+    <p class="footer">
+      Напишите букву палитры (A / B / C / D). После выбора перекрасим приложение, виджет,
+      сгенерируем единый набор иконок (корзина, будильник, редактировать, микрофон) и иконку приложения.
+      Сейчас отмечена <strong>B · Шалфей</strong> как наиболее спокойная и «притягивающая без давления».
+    </p>
+  </div>
+  <script>
+    document.querySelectorAll(".card").forEach(card => {
+      card.addEventListener("click", () => {
+        document.querySelectorAll(".card").forEach(c => c.classList.remove("pick"));
+        card.classList.add("pick");
+      });
+    });
+  </script>
+</body>
+</html>

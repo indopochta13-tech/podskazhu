@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              Приложению нужен ровно один адрес — приглашение «Подключить рядом» (`/?join=123456`).
+              Пока здесь стоял pathPrefix="/", приложение забирало себе весь сайт: правила и
+              политику система отдавала не браузеру, а нам же, и человек видел свой прежний экран.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="soulvoicee.ru"
+                    android:path="/" />
+            </intent-filter>
+
+        </activity>
+
+        <activity
+            android:name=".WidgetRecordActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:finishOnTaskLaunch="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/AppTheme.WidgetRecord" />
+
+        <activity
+            android:name=".WidgetRowActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:finishOnTaskLaunch="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/AppTheme.WidgetRecord" />
+
+        <receiver
+            android:name=".ReminderAlarmReceiver"
+            android:exported="false" />
+
+        <!-- После обновления APK восстанавливаем виджет из сервера — данные не должны слетать. -->
+        <receiver
+            android:name=".PackageReplacedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".CareWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="ru.soulvoice.app.CARE_WIDGET_REFRESH" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".SoulVoiceWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="ru.soulvoice.app.WIDGET_TAB" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/soulvoice_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".WidgetListService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!-- Разрешения -->
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Синхронизация записей с сервером -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Установка обновления APK из настроек приложения -->
+    <!-- REQUEST_INSTALL_PACKAGES убрано: приложение больше не ставит APK само.
+         Это право позволяет устанавливать программы на телефон, и модерация
+         магазинов задаёт по нему вопросы — магазин обновляет сам.
+         Обновления теперь по ссылке. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Напоминания срабатывают в точное время, даже когда телефон спит -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Голосовой ввод: микрофон и системный распознаватель речи -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
+
+    <queries>
+        <package android:name="com.google.android.googlequicksearchbox" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+</manifest>
