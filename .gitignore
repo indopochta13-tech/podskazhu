@@ -7,3 +7,6 @@ android/keystore.properties
 mobile/android/keystore.properties
 .env
 app/public/download/*.apk
+
+mobile/android/app/google-services.json
+mobile/keys/firebase-service-account.json
