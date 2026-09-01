@@ -124,8 +124,11 @@
          Обновления теперь по ссылке. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Напоминания срабатывают в точное время, даже когда телефон спит -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Точные напоминания/будильник:
+         API 33+ — USE_EXACT_ALARM (выдаётся при установке, без запроса у пользователя);
+         API 31–32 — SCHEDULE_EXACT_ALARM для надёжных exact alarms на старых устройствах. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
