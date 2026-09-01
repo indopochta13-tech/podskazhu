@@ -19,6 +19,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WidgetBridge.class);
         registerPlugin(MicBridge.class);
         registerPlugin(UpdateBridge.class);
+        registerPlugin(BatteryOptimizationBridge.class);
         super.onCreate(savedInstanceState);
         WidgetBridge.remember(getIntent());
         clearWebCacheIfUpdated();

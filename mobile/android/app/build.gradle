@@ -14,8 +14,8 @@ android {
         applicationId "ru.soulvoice.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 212
-        versionName "1.9.54"
+        versionCode 213
+        versionName "1.9.55"
         resourceConfigurations += ["ru"]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

@@ -1185,9 +1185,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.54";
+const APP_VERSION = "1.9.55";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 133;
+const SW_VERSION = 134;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -1215,6 +1215,7 @@ const state = {
   supportThread: null,
   support: { unread: 0 },
   micState: "",
+  batteryIgnored: null,
   soundsBack: "settings",
   templates: null,
   templatesLoading: false,
@@ -4361,6 +4362,7 @@ function mountChatVoiceOverlay({ hold = false, tapCancel = false } = {}) {
 }
 
 const MIC_PERMISSION_ASKED_KEY = "vc.micPermissionAsked";
+const BATTERY_HINT_SHOWN_KEY = "vc_battery_hint_shown";
 
 async function ensureMicForVoice() {
   if (!NATIVE?.ensureMicPermission) return true;
@@ -5824,6 +5826,17 @@ async function loadApkVersion() {
 function permissionsTogglesHtml() {
   const micOn = state.micState === "granted";
   const notifOn = notifPermission() === "granted";
+  const batterySub = state.batteryIgnored === null
+    ? "…"
+    : (state.batteryIgnored ? "разрешено" : "ограничено");
+  const batteryRow = NATIVE?.batteryStatus ? `
+    <div class="setting" id="perm-battery-row">
+      <div>
+        <div class="name">Работа в фоне</div>
+        <div class="sub">${batterySub}</div>
+      </div>
+      <button type="button" class="btn ghost" id="perm-battery-open">Открыть настройки</button>
+    </div>` : "";
   return `
     <div class="group-label">Разрешения</div>
     <button type="button" class="setting" id="perm-toggle-mic">
@@ -5834,6 +5847,7 @@ function permissionsTogglesHtml() {
       <div class="name">Уведомления</div>
       <span class="toggle ${notifOn ? "on" : ""}"><i></i></span>
     </button>
+    ${batteryRow}
   `;
 }
 
@@ -5855,6 +5869,57 @@ async function syncMicStateForSettings() {
     }
   }
   return prev !== state.micState;
+}
+
+async function syncBatteryStateForSettings() {
+  if (!NATIVE?.batteryStatus) return false;
+  const prev = state.batteryIgnored;
+  try {
+    const st = await NATIVE.batteryStatus();
+    state.batteryIgnored = Boolean(st.ignored);
+  } catch {
+    // ignore
+  }
+  return prev !== state.batteryIgnored;
+}
+
+function maybeShowBatteryHint() {
+  if (!NATIVE?.openBatterySettings) return;
+  if (localStorage.getItem(BATTERY_HINT_SHOWN_KEY)) return;
+  if (!state.user || !consentAccepted()) return;
+
+  document.getElementById("battery-hint-sheet")?.remove();
+  const el = document.createElement("div");
+  el.id = "battery-hint-sheet";
+  el.className = "help-sheet";
+  el.innerHTML = `
+    <div class="help-sheet-card" role="dialog" aria-modal="true" aria-label="Работа в фоне">
+      <h3 class="help-sheet-title">Напоминания в фоне</h3>
+      <p class="help-sheet-text">На некоторых телефонах система может усыплять приложения, и напоминание придёт с опозданием. Если такое случится — разрешите работу в фоне в настройках телефона.</p>
+      <button type="button" class="btn block" id="battery-hint-open">Открыть настройки</button>
+      <button type="button" class="btn ghost block" id="battery-hint-close">Понятно</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("on"));
+
+  const dismiss = () => {
+    localStorage.setItem(BATTERY_HINT_SHOWN_KEY, "1");
+    el.classList.remove("on");
+    setTimeout(() => el.remove(), 200);
+  };
+
+  el.addEventListener("click", e => { if (e.target === el) dismiss(); });
+  document.getElementById("battery-hint-close")?.addEventListener("click", dismiss);
+  document.getElementById("battery-hint-open")?.addEventListener("click", async () => {
+    dismiss();
+    await NATIVE.openBatterySettings();
+  });
+}
+
+async function openBatteryPermissionSettings() {
+  if (!NATIVE?.openBatterySettings) return;
+  await NATIVE.openBatterySettings();
 }
 
 async function toggleMicPermission() {
@@ -6197,8 +6262,18 @@ function renderSettings() {
     await toggleNotifPermission();
     renderSettings();
   });
+  document.getElementById("perm-battery-open")?.addEventListener("click", async () => {
+    state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
+    await openBatteryPermissionSettings();
+  });
 
   syncMicStateForSettings().then(changed => {
+    if (changed && state.screen === "settings") {
+      state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
+      renderSettings();
+    }
+  });
+  syncBatteryStateForSettings().then(changed => {
     if (changed && state.screen === "settings") {
       state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
       renderSettings();
@@ -6458,6 +6533,9 @@ function renderPermissions() {
     </section>
   `;
   syncMicStateForSettings().then(changed => {
+    if (changed && state.screen === "permissions") renderPermissions();
+  });
+  syncBatteryStateForSettings().then(changed => {
     if (changed && state.screen === "permissions") renderPermissions();
   });
 }
@@ -8273,8 +8351,8 @@ document.addEventListener("click", async event => {
     return state.screen === "permissions" ? renderPermissions() : renderSettings();
   }
 
-  if (event.target.closest("#perm-open-settings")) {
-    if (NATIVE?.openAppSettings) await NATIVE.openAppSettings();
+  if (event.target.closest("#perm-battery-open")) {
+    await openBatteryPermissionSettings();
     return;
   }
 
@@ -9703,6 +9781,7 @@ async function loadAppState(params, { billingReturn = false } = {}) {
   attachDevice();
   mountBillingReturnHooks(billingReturn);
   requestStartupPermissions();
+  maybeShowBatteryHint();
   if (state.listJoinDraft && state.screen === "lists" && state.user) {
     state.listInviteDraft = { code: state.listJoinDraft, step: "nickname" };
     state.listJoinDraft = "";
@@ -9738,6 +9817,14 @@ function watchForeground() {
       // будет мигать при каждом возврате в приложение.
       if (Boolean(state.billing?.active) !== wasPro) render();
     }).catch(() => {});
+    if (state.screen === "settings" || state.screen === "permissions") {
+      Promise.all([syncMicStateForSettings(), syncBatteryStateForSettings()]).then(([mic, bat]) => {
+        if ((mic || bat) && (state.screen === "settings" || state.screen === "permissions")) {
+          if (state.screen === "permissions") renderPermissions();
+          else renderSettings();
+        }
+      }).catch(() => {});
+    }
   };
   document.addEventListener("visibilitychange", sync);
   window.addEventListener("focus", sync);

@@ -16,6 +16,7 @@ import { SpeechRecognition } from "@capacitor-community/speech-recognition";
 const WidgetBridge = registerPlugin("WidgetBridge");
 const MicBridge = registerPlugin("MicBridge");
 const UpdateBridge = registerPlugin("UpdateBridge");
+const BatteryOptimizationBridge = registerPlugin("BatteryOptimizationBridge");
 
 const ACTION_TYPE = "VC_ITEM";
 const CHANNEL_REMIND = "reminders";
@@ -437,6 +438,24 @@ async function ensureMicPermission() {
 async function openAppSettings() {
   try {
     await MicBridge.openAppSettings();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function batteryStatus() {
+  try {
+    const res = await BatteryOptimizationBridge.status();
+    return { ignored: Boolean(res?.ignored) };
+  } catch {
+    return { ignored: true };
+  }
+}
+
+async function openBatterySettings() {
+  try {
+    await BatteryOptimizationBridge.openSettings();
     return true;
   } catch {
     return false;
@@ -882,6 +901,8 @@ if (Capacitor.isNativePlatform()) {
     ensureMicPermission,
     micStatus,
     openAppSettings,
+    batteryStatus,
+    openBatterySettings,
     startWidgetStyleRecord,
     onSpeechDone,
     openUrl,
