@@ -17,6 +17,7 @@ const WidgetBridge = registerPlugin("WidgetBridge");
 const MicBridge = registerPlugin("MicBridge");
 const UpdateBridge = registerPlugin("UpdateBridge");
 const BatteryOptimizationBridge = registerPlugin("BatteryOptimizationBridge");
+const PermissionsBridge = registerPlugin("PermissionsBridge");
 
 const ACTION_TYPE = "VC_ITEM";
 const CHANNEL_REMIND = "reminders";
@@ -462,6 +463,24 @@ async function openBatterySettings() {
   }
 }
 
+async function openNotificationSettings() {
+  try {
+    await PermissionsBridge.openNotificationSettings();
+    return true;
+  } catch {
+    return openAppSettings();
+  }
+}
+
+async function getDeviceManufacturer() {
+  try {
+    const res = await PermissionsBridge.getManufacturer();
+    return String(res?.manufacturer || "");
+  } catch {
+    return "";
+  }
+}
+
 async function startWidgetStyleRecord(opts = {}) {
   try {
     await MicBridge.startWidgetStyleRecord({
@@ -901,6 +920,9 @@ if (Capacitor.isNativePlatform()) {
     ensureMicPermission,
     micStatus,
     openAppSettings,
+    openNotificationSettings,
+    getDeviceManufacturer,
+    refreshNotificationPermission: checkPermission,
     batteryStatus,
     openBatterySettings,
     startWidgetStyleRecord,

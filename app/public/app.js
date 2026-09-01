@@ -1187,7 +1187,7 @@ const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
 const APP_VERSION = "1.9.55";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 134;
+const SW_VERSION = 135;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -1216,6 +1216,8 @@ const state = {
   support: { unread: 0 },
   micState: "",
   batteryIgnored: null,
+  deviceManufacturer: "",
+  permissionsHasIssues: false,
   soundsBack: "settings",
   templates: null,
   templatesLoading: false,
@@ -2549,8 +2551,8 @@ function topChrome() {
   return `
     <header class="top-chrome">
       ${shelfStripHtml()}
-      <button type="button" class="icon-btn chrome-ring chrome-badge ${state.screen === "settings" ? "on" : ""}" data-go="settings" aria-label="${support ? `Настройки, ответ поддержки: ${support}` : "Настройки"}">
-        ${ICONS.menu}${support ? `<span class="chrome-count">${support > 99 ? "99+" : support}</span>` : ""}
+      <button type="button" class="icon-btn chrome-ring chrome-badge ${state.screen === "settings" ? "on" : ""}" data-go="settings" aria-label="${support ? `Настройки, ответ поддержки: ${support}` : (state.permissionsHasIssues ? "Настройки, нужно проверить разрешения" : "Настройки")}">
+        ${ICONS.menu}${support ? `<span class="chrome-count">${support > 99 ? "99+" : support}</span>` : ""}${state.permissionsHasIssues ? '<span class="chrome-perm-dot" aria-hidden="true"></span>' : ""}
       </button>
     </header>
   `;
@@ -4362,7 +4364,172 @@ function mountChatVoiceOverlay({ hold = false, tapCancel = false } = {}) {
 }
 
 const MIC_PERMISSION_ASKED_KEY = "vc.micPermissionAsked";
-const BATTERY_HINT_SHOWN_KEY = "vc_battery_hint_shown";
+const OEM_AUTOSTART_DISMISSED_KEY = "vc_oem_autostart_dismissed";
+
+const OEM_AUTOSTART_MANUFACTURERS = ["xiaomi", "redmi", "poco", "huawei", "honor", "oppo", "vivo", "realme"];
+
+const OEM_ROW_TEXT = {
+  xiaomi: "На телефонах Xiaomi его нужно разрешить вручную, иначе напоминания не приходят",
+  huawei: "На телефонах Huawei его нужно разрешить вручную, иначе напоминания не приходят",
+  oppo: "На телефонах Oppo его нужно разрешить вручную, иначе напоминания не приходят",
+  vivo: "На телефонах vivo и realme его нужно разрешить вручную, иначе напоминания не приходят",
+};
+
+const OEM_AUTOSTART_HELP = {
+  xiaomi: {
+    intro: "На телефонах Xiaomi, Redmi и POCO автозапуск нужно разрешить вручную, иначе напоминания не приходят.",
+    steps: [
+      "Откройте «Настройки» → «Приложения» → SoulVoice",
+      "Включите «Автозапуск»",
+      "Если есть «Без ограничений» или «Не оптимизировать» — тоже включите",
+    ],
+  },
+  huawei: {
+    intro: "На телефонах Huawei и Honor автозапуск нужно разрешить вручную, иначе напоминания не приходят.",
+    steps: [
+      "Откройте «Настройки» → «Приложения» → SoulVoice",
+      "Включите «Автозапуск»",
+      "В «Батарее» выберите «Управляется вручную» и разрешите фоновую работу",
+    ],
+  },
+  oppo: {
+    intro: "На телефонах Oppo автозапуск нужно разрешить вручную, иначе напоминания не приходят.",
+    steps: [
+      "Откройте «Настройки» → «Приложения» → SoulVoice",
+      "Включите «Автозапуск»",
+      "Разрешите работу в фоне, если система спросит",
+    ],
+  },
+  vivo: {
+    intro: "На телефонах vivo и realme автозапуск нужно разрешить вручную, иначе напоминания не приходят.",
+    steps: [
+      "Откройте «i Manager» или «Настройки» → «Приложения» → SoulVoice",
+      "Включите «Автозапуск»",
+      "Разрешите работу в фоне и высокое энергопотребление, если есть такой пункт",
+    ],
+  },
+};
+
+function oemAutostartDismissed() {
+  try { return localStorage.getItem(OEM_AUTOSTART_DISMISSED_KEY) === "1"; } catch { return false; }
+}
+
+function dismissOemAutostartHint() {
+  try { localStorage.setItem(OEM_AUTOSTART_DISMISSED_KEY, "1"); } catch { /* ignore */ }
+}
+
+function normalizeOemBrand(mfr) {
+  const m = String(mfr || "").toLowerCase();
+  if (m.includes("xiaomi") || m.includes("redmi") || m.includes("poco")) return "xiaomi";
+  if (m.includes("huawei") || m.includes("honor")) return "huawei";
+  if (m.includes("oppo")) return "oppo";
+  if (m.includes("vivo") || m.includes("realme")) return "vivo";
+  return "";
+}
+
+function isOemAutostartManufacturer(mfr) {
+  const m = String(mfr || "").toLowerCase();
+  return OEM_AUTOSTART_MANUFACTURERS.some(tag => m.includes(tag));
+}
+
+function buildPermissionIssues() {
+  const issues = [];
+  if (state.micState && state.micState !== "granted") {
+    issues.push({
+      id: "mic",
+      title: "Микрофон выключен",
+      consequence: "Без него нельзя записывать голосом — только вводить текстом",
+      button: "Включить",
+    });
+  }
+  if (notifPermission() !== "granted") {
+    issues.push({
+      id: "notif",
+      title: "Уведомления выключены",
+      consequence: "Напоминания не придут, даже если запись создана",
+      button: "Включить",
+    });
+  }
+  if (NATIVE?.batteryStatus && state.batteryIgnored === false) {
+    issues.push({
+      id: "battery",
+      title: "Приложение усыпляется",
+      consequence: "Система может задержать напоминание на несколько минут или дольше",
+      button: "Исправить",
+    });
+  }
+  if (NATIVE && isOemAutostartManufacturer(state.deviceManufacturer) && !oemAutostartDismissed()) {
+    const brand = normalizeOemBrand(state.deviceManufacturer);
+    issues.push({
+      id: "oem",
+      title: "Автозапуск",
+      consequence: OEM_ROW_TEXT[brand]
+        || "На вашем телефоне его нужно разрешить вручную, иначе напоминания не приходят",
+      button: "Как включить",
+    });
+  }
+  return issues;
+}
+
+function permissionsSectionHtml() {
+  const issues = buildPermissionIssues();
+  if (!issues.length) return "";
+  const rows = issues.map(issue => `
+    <div class="setting perm-issue-row">
+      <div class="perm-issue-copy">
+        <div class="name">${esc(issue.title)}</div>
+        <div class="sub">${esc(issue.consequence)}</div>
+      </div>
+      <button type="button" class="btn ghost perm-issue-btn" data-perm-action="${issue.id}">${esc(issue.button)}</button>
+    </div>
+  `).join("");
+  return `
+    <div class="group-label perm-section-label">Разрешения</div>
+    ${rows}
+  `;
+}
+
+function syncPermissionsBadge() {
+  state.permissionsHasIssues = buildPermissionIssues().length > 0;
+}
+
+async function syncNotifStateForSettings() {
+  const prev = notifPermission();
+  if (NATIVE?.refreshNotificationPermission) {
+    try { await NATIVE.refreshNotificationPermission(); } catch { /* ignore */ }
+  }
+  return prev !== notifPermission();
+}
+
+async function syncDeviceManufacturer() {
+  if (!NATIVE?.getDeviceManufacturer) return false;
+  const prev = state.deviceManufacturer;
+  try {
+    state.deviceManufacturer = await NATIVE.getDeviceManufacturer();
+  } catch {
+    // ignore
+  }
+  return prev !== state.deviceManufacturer;
+}
+
+async function refreshPermissionsState() {
+  const prevKey = buildPermissionIssues().map(i => i.id).join(",");
+  await Promise.all([
+    syncMicStateForSettings(),
+    syncBatteryStateForSettings(),
+    syncNotifStateForSettings(),
+    syncDeviceManufacturer(),
+  ]);
+  syncPermissionsBadge();
+  const nextKey = buildPermissionIssues().map(i => i.id).join(",");
+  return { changed: prevKey !== nextKey };
+}
+
+function applyPermissionsUiRefresh() {
+  if (state.screen === "settings") renderSettings();
+  else if (state.screen === "permissions") renderPermissions();
+  else render();
+}
 
 async function ensureMicForVoice() {
   if (!NATIVE?.ensureMicPermission) return true;
@@ -5823,32 +5990,12 @@ async function loadApkVersion() {
   }
 }
 
-function permissionsTogglesHtml() {
-  const micOn = state.micState === "granted";
-  const notifOn = notifPermission() === "granted";
-  const batterySub = state.batteryIgnored === null
-    ? "…"
-    : (state.batteryIgnored ? "разрешено" : "ограничено");
-  const batteryRow = NATIVE?.batteryStatus ? `
-    <div class="setting" id="perm-battery-row">
-      <div>
-        <div class="name">Работа в фоне</div>
-        <div class="sub">${batterySub}</div>
-      </div>
-      <button type="button" class="btn ghost" id="perm-battery-open">Открыть настройки</button>
-    </div>` : "";
-  return `
-    <div class="group-label">Разрешения</div>
-    <button type="button" class="setting" id="perm-toggle-mic">
-      <div class="name">Доступ к микрофону</div>
-      <span class="toggle ${micOn ? "on" : ""}"><i></i></span>
-    </button>
-    <button type="button" class="setting" id="perm-toggle-notif">
-      <div class="name">Уведомления</div>
-      <span class="toggle ${notifOn ? "on" : ""}"><i></i></span>
-    </button>
-    ${batteryRow}
-  `;
+function permissionsIssuesOnlyHtml() {
+  const issues = buildPermissionIssues();
+  if (!issues.length) {
+    return `<div class="empty">Все разрешения в порядке</div>`;
+  }
+  return permissionsSectionHtml();
 }
 
 async function syncMicStateForSettings() {
@@ -5883,43 +6030,91 @@ async function syncBatteryStateForSettings() {
   return prev !== state.batteryIgnored;
 }
 
-function maybeShowBatteryHint() {
-  if (!NATIVE?.openBatterySettings) return;
-  if (localStorage.getItem(BATTERY_HINT_SHOWN_KEY)) return;
-  if (!state.user || !consentAccepted()) return;
+async function openMicPermissionFromSettings() {
+  if (state.micState === "granted") return;
+  if (NATIVE?.openAppSettings) {
+    await NATIVE.openAppSettings();
+    return;
+  }
+  if (NATIVE?.ensureMicPermission) {
+    const res = await NATIVE.ensureMicPermission();
+    state.micState = res?.granted ? "granted" : "denied";
+  }
+}
 
-  document.getElementById("battery-hint-sheet")?.remove();
+async function openNotifPermissionFromSettings() {
+  if (notifPermission() === "granted") return;
+  if (NATIVE?.openNotificationSettings) {
+    await NATIVE.openNotificationSettings();
+    return;
+  }
+  await setupPush(true);
+}
+
+async function openBatteryPermissionFromSettings() {
+  if (!NATIVE?.openBatterySettings) return;
+  await NATIVE.openBatterySettings();
+}
+
+function showOemAutostartHelp() {
+  document.getElementById("oem-autostart-sheet")?.remove();
+  const brand = normalizeOemBrand(state.deviceManufacturer);
+  const help = OEM_AUTOSTART_HELP[brand];
+  const steps = help?.steps || [
+    "Откройте настройки приложения SoulVoice на телефоне",
+    "Найдите пункт «Автозапуск» или «Работа в фоне»",
+    "Разрешите автозапуск для SoulVoice",
+  ];
+  const intro = help?.intro
+    || "На вашем телефоне автозапуск нужно разрешить вручную, иначе напоминания не приходят.";
   const el = document.createElement("div");
-  el.id = "battery-hint-sheet";
+  el.id = "oem-autostart-sheet";
   el.className = "help-sheet";
   el.innerHTML = `
-    <div class="help-sheet-card" role="dialog" aria-modal="true" aria-label="Работа в фоне">
-      <h3 class="help-sheet-title">Напоминания в фоне</h3>
-      <p class="help-sheet-text">На некоторых телефонах система может усыплять приложения, и напоминание придёт с опозданием. Если такое случится — разрешите работу в фоне в настройках телефона.</p>
-      <button type="button" class="btn block" id="battery-hint-open">Открыть настройки</button>
-      <button type="button" class="btn ghost block" id="battery-hint-close">Понятно</button>
+    <div class="help-sheet-card" role="dialog" aria-modal="true" aria-label="Автозапуск">
+      <button type="button" class="help-sheet-close" id="oem-autostart-close" aria-label="Закрыть">${ICONS.close || "×"}</button>
+      <h3 class="help-sheet-title">Автозапуск</h3>
+      <p class="help-sheet-text">${esc(intro)}</p>
+      <ol class="help-sheet-steps">${steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>
+      <button type="button" class="btn block" id="oem-autostart-done">Я проверил</button>
     </div>
   `;
   document.body.appendChild(el);
   requestAnimationFrame(() => el.classList.add("on"));
 
   const dismiss = () => {
-    localStorage.setItem(BATTERY_HINT_SHOWN_KEY, "1");
+    dismissOemAutostartHint();
     el.classList.remove("on");
-    setTimeout(() => el.remove(), 200);
+    setTimeout(() => {
+      el.remove();
+      refreshPermissionsState().then(({ changed }) => {
+        if (changed) applyPermissionsUiRefresh();
+      });
+    }, 200);
   };
 
   el.addEventListener("click", e => { if (e.target === el) dismiss(); });
-  document.getElementById("battery-hint-close")?.addEventListener("click", dismiss);
-  document.getElementById("battery-hint-open")?.addEventListener("click", async () => {
-    dismiss();
-    await NATIVE.openBatterySettings();
-  });
+  document.getElementById("oem-autostart-close")?.addEventListener("click", dismiss);
+  document.getElementById("oem-autostart-done")?.addEventListener("click", dismiss);
 }
 
-async function openBatteryPermissionSettings() {
-  if (!NATIVE?.openBatterySettings) return;
-  await NATIVE.openBatterySettings();
+async function handlePermissionAction(action) {
+  if (action === "mic") await openMicPermissionFromSettings();
+  else if (action === "notif") await openNotifPermissionFromSettings();
+  else if (action === "battery") await openBatteryPermissionFromSettings();
+  else if (action === "oem") showOemAutostartHelp();
+}
+
+function mountPermissionActionHandlers(root = viewEl) {
+  root?.querySelectorAll("[data-perm-action]").forEach(btn => {
+    btn.addEventListener("click", async event => {
+      event.stopPropagation();
+      if (state.screen === "settings") {
+        state.settingsScroll = root.querySelector(".scroll")?.scrollTop || 0;
+      }
+      await handlePermissionAction(btn.getAttribute("data-perm-action"));
+    });
+  });
 }
 
 async function toggleMicPermission() {
@@ -6040,6 +6235,7 @@ function renderSettings() {
     <section class="screen">
       ${bar("Настройки", { back: "shelves" })}
       <div class="scroll pad-bottom">
+        ${permissionsSectionHtml()}
         ${settingsSubscriptionHtml()}
 
         <div class="keys-row">
@@ -6133,8 +6329,6 @@ function renderSettings() {
           </div>
           <span class="row-chevron">${ICONS.chevron}</span>
         </button>
-
-        ${permissionsTogglesHtml()}
 
         <div class="group-label">Прочее</div>
         <button class="setting" data-go="support">
@@ -6252,28 +6446,9 @@ function renderSettings() {
     });
   });
 
-  document.getElementById("perm-toggle-mic")?.addEventListener("click", async () => {
-    state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
-    await toggleMicPermission();
-    renderSettings();
-  });
-  document.getElementById("perm-toggle-notif")?.addEventListener("click", async () => {
-    state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
-    await toggleNotifPermission();
-    renderSettings();
-  });
-  document.getElementById("perm-battery-open")?.addEventListener("click", async () => {
-    state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
-    await openBatteryPermissionSettings();
-  });
+  mountPermissionActionHandlers(viewEl);
 
-  syncMicStateForSettings().then(changed => {
-    if (changed && state.screen === "settings") {
-      state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
-      renderSettings();
-    }
-  });
-  syncBatteryStateForSettings().then(changed => {
+  refreshPermissionsState().then(({ changed }) => {
     if (changed && state.screen === "settings") {
       state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
       renderSettings();
@@ -6528,14 +6703,12 @@ function renderPermissions() {
     <section class="screen">
       ${bar("Разрешения", { back: "settings" })}
       <div class="scroll pad-bottom">
-        ${permissionsTogglesHtml()}
+        ${permissionsIssuesOnlyHtml()}
       </div>
     </section>
   `;
-  syncMicStateForSettings().then(changed => {
-    if (changed && state.screen === "permissions") renderPermissions();
-  });
-  syncBatteryStateForSettings().then(changed => {
+  mountPermissionActionHandlers(viewEl);
+  refreshPermissionsState().then(({ changed }) => {
     if (changed && state.screen === "permissions") renderPermissions();
   });
 }
@@ -8341,21 +8514,14 @@ document.addEventListener("click", async event => {
     }
   }
 
-  if (event.target.closest("#perm-toggle-mic")) {
-    await toggleMicPermission();
-    return state.screen === "permissions" ? renderPermissions() : renderSettings();
-  }
-
-  if (event.target.closest("#perm-toggle-notif")) {
-    await toggleNotifPermission();
-    return state.screen === "permissions" ? renderPermissions() : renderSettings();
-  }
-
-  if (event.target.closest("#perm-battery-open")) {
-    await openBatteryPermissionSettings();
+  if (event.target.closest("[data-perm-action]")) {
+    const btn = event.target.closest("[data-perm-action]");
+    if (state.screen === "settings") {
+      state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
+    }
+    await handlePermissionAction(btn.getAttribute("data-perm-action"));
     return;
   }
-
 
   const listTab = event.target.closest("[data-list-tab]");
   if (listTab) {
@@ -9781,7 +9947,9 @@ async function loadAppState(params, { billingReturn = false } = {}) {
   attachDevice();
   mountBillingReturnHooks(billingReturn);
   requestStartupPermissions();
-  maybeShowBatteryHint();
+  refreshPermissionsState().then(({ changed }) => {
+    if (changed) applyPermissionsUiRefresh();
+  });
   if (state.listJoinDraft && state.screen === "lists" && state.user) {
     state.listInviteDraft = { code: state.listJoinDraft, step: "nickname" };
     state.listJoinDraft = "";
@@ -9802,32 +9970,32 @@ async function loadAppState(params, { billingReturn = false } = {}) {
 let lastForegroundSync = 0;
 
 function watchForeground() {
-  const sync = () => {
+  const syncBilling = () => {
     if (document.visibilityState !== "visible") return;
     if (!store.token) return;
-    // Пока человек не принял условия, ничего не обновляем и не перерисовываем:
-    // иначе экран согласия исчезает сам, а приложение открывается без ответа.
     if (state.user && !consentAccepted()) return;
     const now = Date.now();
     if (now - lastForegroundSync < 10000) return;
     lastForegroundSync = now;
     const wasPro = Boolean(state.billing?.active);
     refreshState().then(() => {
-      // Перерисовываем, только если подписка изменилась: иначе экран
-      // будет мигать при каждом возврате в приложение.
       if (Boolean(state.billing?.active) !== wasPro) render();
     }).catch(() => {});
-    if (state.screen === "settings" || state.screen === "permissions") {
-      Promise.all([syncMicStateForSettings(), syncBatteryStateForSettings()]).then(([mic, bat]) => {
-        if ((mic || bat) && (state.screen === "settings" || state.screen === "permissions")) {
-          if (state.screen === "permissions") renderPermissions();
-          else renderSettings();
-        }
-      }).catch(() => {});
-    }
   };
-  document.addEventListener("visibilitychange", sync);
-  window.addEventListener("focus", sync);
+  const syncPermissionsOnResume = () => {
+    if (document.visibilityState !== "visible") return;
+    if (!store.token) return;
+    if (state.user && !consentAccepted()) return;
+    refreshPermissionsState().then(({ changed }) => {
+      if (changed) applyPermissionsUiRefresh();
+    }).catch(() => {});
+  };
+  const onResume = () => {
+    syncBilling();
+    syncPermissionsOnResume();
+  };
+  document.addEventListener("visibilitychange", onResume);
+  window.addEventListener("focus", onResume);
 }
 
 async function boot() {
@@ -9928,7 +10096,12 @@ function attachDevice() {
         // trash/alarm с виджета обрабатывает нативный слой без открытия UI.
       });
     }
-    NATIVE.onChanged(() => refreshState());
+    NATIVE.onChanged(() => {
+      refreshState();
+      refreshPermissionsState().then(({ changed }) => {
+        if (changed) applyPermissionsUiRefresh();
+      }).catch(() => {});
+    });
     NATIVE.onLiveNotice?.(payload => showLiveNotice(payload));
     // Нажали на ответ поддержки в шторке — открываем переписку, а не главный экран.
     NATIVE.onSupportOpen?.(() => go("support"));

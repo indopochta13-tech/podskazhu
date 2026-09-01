@@ -544,6 +544,7 @@ button.shelf-pill:active { transform: scale(.9); }
 }
 .help-sheet.on { opacity: 1; }
 .help-sheet-card {
+  position: relative;
   width: 100%;
   max-width: 380px;
   padding: 24px;
@@ -568,6 +569,33 @@ button.shelf-pill:active { transform: scale(.9); }
 }
 .help-sheet-text b { color: var(--ink); }
 .help-sheet .btn.block { margin-top: 8px; }
+.help-sheet-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.help-sheet-close svg { width: 18px; height: 18px; }
+.help-sheet-steps {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.help-sheet-steps li + li { margin-top: 6px; }
+.perm-issue-row { align-items: flex-start; }
+.perm-issue-copy { flex: 1; min-width: 0; }
+.perm-issue-btn { flex-shrink: 0; margin-top: 2px; }
+.perm-section-label { margin-top: 0; }
 
 /* Подсказка при коротком тапе по кнопке записи.
    Без фона и рамки — просто слова посреди экрана. Плашка выглядела
@@ -2319,6 +2347,17 @@ a.setting { text-decoration: none; color: inherit; }
   font-weight: 700;
   line-height: 14px;
   text-align: center;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.chrome-perm-dot {
+  position: absolute;
+  bottom: 1px;
+  left: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
   pointer-events: none;
   box-shadow: 0 0 0 2px var(--bg);
 }
