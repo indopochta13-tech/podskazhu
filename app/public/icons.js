@@ -40,6 +40,8 @@ export const ICONS = {
   /** Шеврон вглубь. Нужен на каждой строке настроек. Tabler: chevron-right */
   chevron: `<svg ${A}><path d="M9 6l6 6l-6 6" /></svg>`,
   close: `<svg ${A}><path d="M18 6l-12 12" /> <path d="M6 6l12 12" /></svg>`,
+  /** Замок подписки на значке полки. Tabler: lock */
+  lock: `<svg ${A}><path d="M5 11a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z" /><path d="M8 11v-4a4 4 0 1 1 8 0v4" /></svg>`,
 
   /** Выбор друга: она. Tabler: woman */
   friendShe: `<svg ${A}><path d="M10 16v5" /> <path d="M14 16v5" /> <path d="M8 16h8l-2 -7h-4l-2 7" /> <path d="M5 11c1.667 -1.333 3.333 -2 5 -2" /> <path d="M19 11c-1.667 -1.333 -3.333 -2 -5 -2" /> <path d="M10 4a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /></svg>`,

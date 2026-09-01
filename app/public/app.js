@@ -11,6 +11,7 @@ import {
   isDemoItem,
   isDemoItemId,
 } from "/demo-shelves.js";
+import { PRO_SHELF_PROMO } from "/pro-shelf-promo.js";
 
 /** Автовыбор простого режима на слабых устройствах (настройка может переопределить). */
 function preferSimpleCloud() {
@@ -66,20 +67,30 @@ const BUILTIN_SHELVES = [
 ];
 
 /** Ежедневные дела — отдельный экран из верхней панели, не календарь. */
-// Порядок: сначала бесплатные, потом платные. Вразнобой человек не понимает,
-// где проходит граница, и упирается в подписку неожиданно.
 const DAILY_SHELVES = [
-  // Бесплатно
+  { id: "health", label: "Витамины" },
+  { id: "care", label: "Косметика" },
+  { id: "sport", label: "Спорт" },
+  { id: "bills", label: "Оплаты" },
+  { id: "meters", label: "Счетчики и ЖКХ" },
   { id: "alarms", label: "Будильник" },
   { id: "bday", label: "Дни рождения" },
-  // По подписке
+];
+const DAILY_SHELF_IDS = new Set(DAILY_SHELVES.map(s => s.id));
+
+/** Шапка: слева платные полки (с замком), справа бесплатные. */
+const PRO_STRIP_SHELVES = [
+  { id: "shared", label: "Общие списки", go: "lists" },
   { id: "health", label: "Витамины" },
   { id: "care", label: "Косметика" },
   { id: "sport", label: "Спорт" },
   { id: "bills", label: "Оплаты" },
   { id: "meters", label: "Счетчики и ЖКХ" },
 ];
-const DAILY_SHELF_IDS = new Set(DAILY_SHELVES.map(s => s.id));
+const FREE_STRIP_SHELVES = [
+  { id: "alarms", label: "Будильник" },
+  { id: "bday", label: "Дни рождения" },
+];
 
 /** PRO-полки верхнего меню и общие списки. */
 // Должен совпадать с lib/pro-shelves.js на сервере.
@@ -97,32 +108,80 @@ function isProShelf(id) {
   return PRO_SHELF_IDS.has(String(id || ""));
 }
 
-function proDemoView(shelfOrScreen) {
+function proShelfKey(shelfOrScreen) {
+  if (shelfOrScreen === "lists") return "shared";
+  return String(shelfOrScreen || "");
+}
+
+/** Полка или общие списки доступны только по подписке. */
+function proShelfGated(shelfOrScreen) {
   if (isPro()) return false;
   if (shelfOrScreen === "lists" || shelfOrScreen === "shared") return true;
   return isProShelf(shelfOrScreen);
+}
+
+/** @deprecated alias */
+function proDemoView(shelfOrScreen) {
+  return proShelfGated(shelfOrScreen);
+}
+
+function proShelfIsDemo(shelfOrScreen) {
+  if (!proShelfGated(shelfOrScreen)) return false;
+  return Boolean(state.proShelfDemoMode[proShelfKey(shelfOrScreen)]);
+}
+
+function proShelfInPromo(shelfOrScreen) {
+  return proShelfGated(shelfOrScreen) && !proShelfIsDemo(shelfOrScreen);
 }
 
 function proDemoToast() {
   toast("Доступно по подписке ПРО");
 }
 
-/**
- * Плашка «Образец заполнения» — только на платных полках.
- *
- * Раньше проверялась одна подписка, и плашка висела даже на будильниках,
- * которые бесплатны. Человек видел «доступно по подписке» на том, чем
- * мог пользоваться, и не понимал, где граница.
- */
-function proDemoBannerHtml(shelf) {
-  if (isPro()) return "";
-  if (shelf && !proDemoView(shelf)) return "";
+/** Полоса «это пример» — только когда человек сам открыл образец. */
+function proShelfExampleBannerHtml(shelfOrScreen) {
+  if (!proShelfIsDemo(shelfOrScreen)) return "";
+  const key = proShelfKey(shelfOrScreen);
   return `
-    <div class="pro-demo-banner" role="note">
-      <div class="pro-demo-banner-title">Образец заполнения</div>
-      <div class="pro-demo-banner-sub">Данные функции доступны по подписке ПРО</div>
+    <div class="pro-shelf-example-bar" role="note">
+      <button type="button" class="pro-shelf-example-back icon-btn" data-pro-shelf-promo-back="${esc(key)}" aria-label="Назад к описанию">${ICONS.back}</button>
+      <div class="pro-shelf-example-text">Это пример. Ваши записи появятся здесь после подписки</div>
     </div>
   `;
+}
+
+function proShelfPromoBullets(bullets) {
+  if (!bullets?.length) return "";
+  return `<ul class="pro-shelf-promo-bullets">${bullets.map(b => `<li>${esc(b)}</li>`).join("")}</ul>`;
+}
+
+function proShelfPromoScreenHtml(shelfKey, { screenTitle = "", back = "shelves" } = {}) {
+  const promo = PRO_SHELF_PROMO[shelfKey];
+  if (!promo) return "";
+  const title = screenTitle || promo.title;
+  return `
+    <section class="screen">
+      ${offlineBar()}
+      ${bar(title, { back })}
+      <div class="scroll pad-bottom pro-shelf-promo">
+        <h1 class="pro-shelf-promo-title">${esc(promo.title)}</h1>
+        <p class="pro-shelf-promo-body">${esc(promo.body)}</p>
+        ${proShelfPromoBullets(promo.bullets)}
+        ${promo.extra ? `<p class="pro-shelf-promo-extra">${esc(promo.extra)}</p>` : ""}
+        ${promo.footer ? `<p class="pro-shelf-promo-footer">${esc(promo.footer)}</p>` : ""}
+        <div class="pro-shelf-promo-actions">
+          <button type="button" class="btn ghost" data-pro-shelf-demo="${esc(shelfKey)}">Посмотреть пример</button>
+          <button type="button" class="btn" data-pro-subscribe>Открыть подписку</button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function openProSubscription() {
+  state.scrollToSubscription = true;
+  state.settingsScroll = 0;
+  go("settings");
 }
 
 function blockDemoMutation(target) {
@@ -171,6 +230,7 @@ function blockShelfFabMutation() {
 
 async function onProActivated() {
   try {
+    state.proShelfDemoMode = {};
     const data = await api("/start", { method: "POST", body: { tz: state.user?.settings?.tz } });
     absorb(data);
     if (state.screen === "daily" || state.screen === "lists") render();
@@ -179,7 +239,7 @@ async function onProActivated() {
 }
 
 function effectiveShelfItems(shelf) {
-  if (proDemoView(shelf)) return loadDemoShelf(shelf);
+  if (proShelfIsDemo(shelf)) return loadDemoShelf(shelf);
   return null;
 }
 
@@ -247,7 +307,7 @@ function defaultShelf() {
 }
 
 function defaultDailyShelf() {
-  return DAILY_SHELVES[0]?.id || "care";
+  return "alarms";
 }
 
 function isDailyShelfItem(item) {
@@ -1199,6 +1259,8 @@ const state = {
   familyUiOpen: false,
   familyScrollBottom: false,
   billingPlanOpen: null,
+  proShelfDemoMode: {},
+  scrollToSubscription: false,
   appUpdate: { checking: false, installing: false, shellReloading: false, info: null, error: "" },
   online: navigator.onLine,
   shelfDraft: null,
@@ -2270,7 +2332,7 @@ async function goNavigate(screen, params = {}) {
 function goImpl(screen, params = {}) {
   // Снимаем фокус с полки: на телефоне :focus после тапа залипает и выглядит как «открыта».
   const focused = document.activeElement;
-  if (focused?.closest?.("[data-strip-shelf]")) focused.blur();
+  if (focused?.closest?.("[data-strip-shelf], [data-strip-go]")) focused.blur();
   if (screen !== "settings") {
     state.settingsScroll = 0;
     state.shortcutOpen = false;
@@ -2282,6 +2344,7 @@ function goImpl(screen, params = {}) {
   if (screen === "lists") {
     state.listInviteOpen = Boolean(params.invite);
     state.listId = params.invite ? null : (params.pairId || state.listId || null);
+    if (proShelfGated("shared")) state.proShelfDemoMode.shared = false;
     state.screen = "lists";
     refreshState().then(() => {
       if (!state.listId && state.lists.length && !state.listInviteOpen) state.listId = state.lists[0].id;
@@ -2332,8 +2395,6 @@ function shelfItemCount(shelfId) {
 
 function openShelfFromStrip(shelfId) {
   document.activeElement?.blur?.();
-  // Полка могла быть скрыта настройками — раз человек её открыл,
-  // значит она ему нужна. Убираем из скрытых, чтобы не пряталась снова.
   const hidden = state.user?.settings?.hiddenShelves;
   if (Array.isArray(hidden) && hidden.includes(shelfId)) {
     api("/settings", {
@@ -2341,6 +2402,7 @@ function openShelfFromStrip(shelfId) {
       body: { hiddenShelves: hidden.filter(id => id !== shelfId) },
     }).then(absorb).catch(() => {});
   }
+  if (proShelfGated(shelfId)) state.proShelfDemoMode[shelfId] = false;
   return go("daily", { shelf: shelfId });
 }
 
@@ -2415,51 +2477,66 @@ function mountShelfMicFab() {
   requestAnimationFrame(mountFabSoul);
 }
 
+function stripShelfGlyph(shelfId) {
+  if (shelfId === "shared") return icon("checklist", 16);
+  const iconName = shelfId === "alarms" && hasActiveAlarms() ? "alarmsOn" : shelfIconName(shelfId);
+  return ICONS[iconName] ? icon(iconName, 16) : "";
+}
+
+function stripShelfActive(shelf) {
+  if (shelf.go === "lists") return state.screen === "lists";
+  return state.screen === "daily" && state.shelf === shelf.id;
+}
+
+function shelfStripPillHtml(shelf, { locked = false, badge = 0 } = {}) {
+  const filled = shelf.go === "lists"
+    ? (state.lists?.length > 0 || Boolean(state.listsUnread))
+    : shelfItemCount(shelf.id) > 0;
+  const active = stripShelfActive(shelf);
+  const cls = ["shelf-pill"];
+  if (!filled) cls.push("empty");
+  if (active) cls.push("on");
+  if (locked) cls.push("pro-locked");
+  if (badge > 0) cls.push("has-badge");
+  const attrs = shelf.go === "lists"
+    ? `data-strip-go="lists"`
+    : `data-strip-shelf="${shelf.id}"`;
+  const lock = locked ? `<span class="shelf-pill-lock" aria-hidden="true">${icon("lock", 8)}</span>` : "";
+  const count = badge > 0
+    ? `<span class="shelf-pill-badge">${badge > 99 ? "99+" : badge}</span>`
+    : "";
+  return `<button type="button" class="${cls.join(" ")}" ${attrs}
+    aria-label="${esc(shelf.label)}" aria-current="${active ? "page" : "false"}">${stripShelfGlyph(shelf.id)}${lock}${count}</button>`;
+}
+
 /**
  * Полоса полок в шапке.
  *
- * Семь значков, всегда на одних местах, всегда в одну строку. Неактивные
- * приглушены одинаково; выбранная полка — только темнее значок (.on).
- *
- * Никаких надписей здесь быть не должно: любая подпись — это лишние
- * двадцать точек, из-за которых полоса переставала помещаться и
- * переносилась на вторую строку.
+ * Слева — платные полки под замком, справа — бесплатные. Без подписей:
+ * только значки фиксированного размера в одну строку.
  */
 function shelfStripHtml() {
   if (!state.user) return "";
   if (state.screen === "record" || state.screen === "start") return "";
 
-  // Подсветка только когда человек сам открыл полку (экран daily),
-  // не на календаре дня (shelves) и не из-за наличия записей.
-  const activeShelf = state.screen === "daily" ? state.shelf : "";
+  const locked = !isPro();
+  const listsUnread = state.listsUnread || 0;
+  const proPills = PRO_STRIP_SHELVES.map(shelf => shelfStripPillHtml(shelf, {
+    locked,
+    badge: shelf.id === "shared" ? listsUnread : 0,
+  })).join("");
+  const freePills = FREE_STRIP_SHELVES.map(shelf => shelfStripPillHtml(shelf)).join("");
 
-  const pills = DAILY_SHELVES.map(shelf => {
-    const filled = shelfItemCount(shelf.id) > 0;
-    const active = activeShelf === shelf.id;
-    // У будильника с активными будильниками — звонящий колокольчик (без .on).
-    const iconName = shelf.id === "alarms" && hasActiveAlarms() ? "alarmsOn" : shelfIconName(shelf.id);
-    const glyph = ICONS[iconName] ? icon(iconName, 16) : "";
-    const cls = ["shelf-pill"];
-    if (!filled) cls.push("empty");
-    if (active) cls.push("on");
-    return `<button type="button" class="${cls.join(" ")}" data-strip-shelf="${shelf.id}"
-      aria-label="${esc(shelf.label)}" aria-current="${active ? "page" : "false"}">${glyph}</button>`;
-  }).join("");
-
-  return `<nav class="shelf-strip" aria-label="Полки">${pills}</nav>`;
+  return `
+    <nav class="shelf-strip shelf-strip--pro" aria-label="Полки по подписке">${proPills}</nav>
+    <nav class="shelf-strip shelf-strip--free" aria-label="Бесплатные полки">${freePills}</nav>
+  `;
 }
 
 function topChrome() {
   const support = state.support?.unread || 0;
-  const listsUnread = state.listsUnread || 0;
-  const listsLabel = listsUnread
-    ? `Общие списки, непрочитанных: ${listsUnread > 99 ? "99+" : listsUnread}`
-    : "Общие списки";
   return `
     <header class="top-chrome">
-      <button type="button" class="icon-btn chrome-ring chrome-badge ${state.screen === "lists" ? "on" : ""}" data-go="lists" aria-label="${listsLabel}">
-        ${ICONS.family}${listsUnread ? `<span class="chrome-count">${listsUnread > 99 ? "99+" : listsUnread}</span>` : ""}
-      </button>
       ${shelfStripHtml()}
       <button type="button" class="icon-btn chrome-ring chrome-badge ${state.screen === "settings" ? "on" : ""}" data-go="settings" aria-label="${support ? `Настройки, ответ поддержки: ${support}` : "Настройки"}">
         ${ICONS.menu}${support ? `<span class="chrome-count">${support > 99 ? "99+" : support}</span>` : ""}
@@ -4760,6 +4837,10 @@ function dailyShelfTabs(activeId) {
 
 function renderDaily() {
   if (!state.shelf) state.shelf = defaultDailyShelf();
+  if (proShelfInPromo(state.shelf)) {
+    viewEl.innerHTML = proShelfPromoScreenHtml(state.shelf, { back: "shelves" });
+    return;
+  }
   if (state.shelf === "alarms") return renderAlarmsShelf(true);
   if (state.shelf === "care") return renderCareShelf(true);
   if (state.shelf === "health") return renderHealthShelf(true);
@@ -4768,7 +4849,7 @@ function renderDaily() {
   viewEl.innerHTML = `
     <section class="screen">
       ${offlineBar()}
-      ${proDemoBannerHtml(state.shelf)}
+      ${proShelfExampleBannerHtml(state.shelf)}
       ${bar(labelOfShelf(state.shelf), { back: "shelves" })}
       ${promptCard()}
       <div class="scroll pad-fab ${shelfFabPadClass()}">
@@ -4851,6 +4932,10 @@ function promptCard() {
 }
 
 function renderCareShelf(daily = false) {
+  if (proShelfInPromo("care")) {
+    viewEl.innerHTML = proShelfPromoScreenHtml("care", { back: "shelves" });
+    return;
+  }
   const waiting = overdueCount();
   const list = shelfItems("care").slice().sort((a, b) =>
     (a.careOrder || 0) - (b.careOrder || 0)
@@ -4864,7 +4949,7 @@ function renderCareShelf(daily = false) {
   viewEl.innerHTML = `
     <section class="screen">
       ${offlineBar()}
-      ${proDemoBannerHtml(state.shelf)}
+      ${proShelfExampleBannerHtml(state.shelf)}
       ${daily ? `${bar(labelOfShelf("care"), { back: "shelves" })}` : shelfTabs("care", { waiting })}
       ${promptCard()}
       <div class="scroll pad-fab ${shelfFabPadClass()} care-board">
@@ -4994,6 +5079,10 @@ function mountCareTimeWheels(draft) {
 }
 
 function renderHealthShelf(daily = false) {
+  if (proShelfInPromo("health")) {
+    viewEl.innerHTML = proShelfPromoScreenHtml("health", { back: "shelves" });
+    return;
+  }
   const waiting = overdueCount();
   const list = shelfItems("health").slice().sort((a, b) =>
     (a.healthOrder || 0) - (b.healthOrder || 0)
@@ -5003,7 +5092,7 @@ function renderHealthShelf(daily = false) {
   viewEl.innerHTML = `
     <section class="screen">
       ${offlineBar()}
-      ${proDemoBannerHtml(state.shelf)}
+      ${proShelfExampleBannerHtml(state.shelf)}
       ${daily ? `${bar(labelOfShelf("health"), { back: "shelves" })}` : shelfTabs("health", { waiting })}
       ${promptCard()}
       <div class="scroll pad-fab ${shelfFabPadClass()} health-board">
@@ -5160,7 +5249,7 @@ function renderAlarmsShelf(daily = false) {
   viewEl.innerHTML = `
     <section class="screen">
       ${offlineBar()}
-      ${proDemoBannerHtml(state.shelf)}
+      ${proShelfExampleBannerHtml(state.shelf)}
       ${daily ? `${bar(labelOfShelf("alarms"), { back: "shelves" })}` : shelfTabs("alarms")}
       <div class="alarm-head">${until ? esc(until) : "Нет включённых будильников"}</div>
       <div class="scroll pad-fab ${shelfFabPadClass()} alarm-list">
@@ -6142,6 +6231,12 @@ function renderSettings() {
   if (scroller) {
     if (state.settingsScroll) scroller.scrollTop = state.settingsScroll;
     scroller.addEventListener("scroll", () => { state.settingsScroll = scroller.scrollTop; }, { passive: true });
+    if (state.scrollToSubscription) {
+      state.scrollToSubscription = false;
+      requestAnimationFrame(() => {
+        document.getElementById("settings-subscription")?.scrollIntoView({ block: "start" });
+      });
+    }
   }
 
   document.getElementById("add-block")?.addEventListener("submit", async event => {
@@ -6879,12 +6974,16 @@ function renderLists() {
     deferRender();
     return;
   }
-  if (proDemoView("shared")) {
+  if (proShelfInPromo("shared")) {
+    viewEl.innerHTML = proShelfPromoScreenHtml("shared", { screenTitle: "Общие списки", back: "shelves" });
+    return;
+  }
+  if (proShelfIsDemo("shared")) {
     const open = loadDemoSharedList();
     viewEl.innerHTML = `
       <section class="screen">
+        ${proShelfExampleBannerHtml("shared")}
         ${bar("Общие списки", { back: "shelves" })}
-        ${proDemoBannerHtml("shared")}
         <div class="tabs list-person-tabs list-person-tabs--demo">
           <button type="button" class="tab on">${esc(open.nickname)}</button>
         </div>
@@ -8505,6 +8604,42 @@ document.addEventListener("click", async event => {
   const stripShelf = event.target.closest("[data-strip-shelf]");
   if (stripShelf) {
     return openShelfFromStrip(stripShelf.dataset.stripShelf);
+  }
+
+  const stripGo = event.target.closest("[data-strip-go]");
+  if (stripGo?.dataset.stripGo === "lists") {
+    return go("lists");
+  }
+
+  const proDemoBtn = event.target.closest("[data-pro-shelf-demo]");
+  if (proDemoBtn) {
+    const key = proDemoBtn.dataset.proShelfDemo;
+    if (key) {
+      state.proShelfDemoMode[key] = true;
+      if (key === "shared") renderLists();
+      else {
+        if (DAILY_SHELF_IDS.has(key)) state.shelf = key;
+        if (state.screen !== "daily" && key !== "shared") go("daily", { shelf: key });
+        else render();
+      }
+    }
+    return;
+  }
+
+  const proPromoBack = event.target.closest("[data-pro-shelf-promo-back]");
+  if (proPromoBack) {
+    const key = proPromoBack.dataset.proShelfPromoBack;
+    if (key) {
+      state.proShelfDemoMode[key] = false;
+      if (key === "shared") renderLists();
+      else render();
+    }
+    return;
+  }
+
+  if (event.target.closest("[data-pro-subscribe]")) {
+    openProSubscription();
+    return;
   }
 
   if (event.target.closest("#home-widget-toggle")) {

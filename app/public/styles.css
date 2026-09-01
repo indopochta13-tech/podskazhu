@@ -3311,6 +3311,134 @@ html.vc-native {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* PRO-полки: промо-экран и полоса «это пример». */
+.pro-shelf-example-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.pro-shelf-example-back {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+}
+.pro-shelf-example-back svg { width: 18px; height: 18px; display: block; }
+.pro-shelf-example-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.pro-shelf-example-bar + .bar,
+.pro-shelf-example-bar + .tabs,
+.pro-shelf-example-bar + .list-person-tabs {
+  margin-top: 8px;
+}
+.pro-shelf-promo {
+  padding: 8px 20px 28px;
+}
+.pro-shelf-promo-title {
+  margin: 0 0 10px;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.pro-shelf-promo-body {
+  margin: 0 0 14px;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.pro-shelf-promo-bullets {
+  margin: 0 0 16px;
+  padding: 0 0 0 18px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.pro-shelf-promo-bullets li + li { margin-top: 8px; }
+.pro-shelf-promo-extra,
+.pro-shelf-promo-footer {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.pro-shelf-promo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 22px;
+}
+.pro-shelf-promo-actions .btn { width: 100%; }
+
+.shelf-strip--pro {
+  flex: 1 1 0;
+  justify-content: space-evenly;
+}
+.shelf-strip--free {
+  flex: 0 0 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  padding: 0 2px 0 0;
+}
+.shelf-pill.pro-locked,
+.shelf-pill.has-badge {
+  overflow: visible;
+}
+.shelf-pill.pro-locked {
+  position: relative;
+}
+.shelf-pill-lock {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+  box-shadow: 0 0 0 1px var(--line);
+  pointer-events: none;
+}
+.shelf-pill-lock svg {
+  width: 8px;
+  height: 8px;
+  display: block;
+}
+.shelf-pill-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
 .card-row.fulfilled { opacity: 0.72; }
 .card-row.fulfilled .done-text {
   text-decoration: line-through;

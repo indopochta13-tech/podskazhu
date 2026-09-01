@@ -32,7 +32,8 @@ console.log("Вёрстка шапки соответствует задуман
 // ── Разметка ──────────────────────────────────────────────────────────
 
 check("полоса рисуется как nav без обёрток",
-  /return `<nav class="shelf-strip"/.test(app),
+  app.includes('class="shelf-strip shelf-strip--pro"')
+    && app.includes('class="shelf-strip shelf-strip--free"'),
   "разметка полосы не переписана — вероятно, патч не накатан");
 
 check("в кнопке полки только значок",
@@ -48,7 +49,8 @@ check("у будильника с активными будильниками с
   "звонящий колокольчик не подключён");
 
 check("календарь не подсвечивает полку в полосе",
-  /activeShelf = state\.screen === "daily" \? state\.shelf : ""/.test(app),
+  app.includes("function stripShelfActive(shelf)")
+    && app.includes('return state.screen === "daily" && state.shelf === shelf.id'),
   "на календаре остаётся подсветка полки");
 
 check("облако на FAB монтируется после каждой полки",

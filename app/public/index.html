@@ -37,7 +37,7 @@
   // До app.js: обновить SW и подтянуть свежий app.js. Старый кэш без silentStart
   // показывал «Скажите, что напомнить» и не давал SW обновиться без входа.
   // SWV и app.js?v= ниже — одно число; при смене поднимайте и SW_VERSION в sw.js / app.js.
-  window.__VC_SHELL_V = 129;
+  window.__VC_SHELL_V = 131;
   if (!("serviceWorker" in navigator)) return;
   var SWV = String(window.__VC_SHELL_V);
   var reloadKey = "vc.sw-reload-" + SWV;
@@ -105,6 +105,6 @@
     <main class="stage" id="stage"></main>
   </div>
 </template>
-<script src="/app.js?v=129" type="module"></script>
+<script src="/app.js?v=131" type="module"></script>
 </body>
 </html>
