@@ -1088,7 +1088,7 @@ const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
 const APP_VERSION = "1.9.50";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 129;
+const SW_VERSION = 130;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -2097,7 +2097,11 @@ function buildFaceSymbolPoints(reaction, canvas) {
 }
 
 function resolveCloudReaction(event, sourceText, shelf = "") {
-  const heavy = isHeavy(sourceText || "");
+  // Тяжесть берём и из текста, и из уже принятого решения. Событие heavy может
+  // прийти без исходного текста — тогда heavy остался бы false, guard пропустил бы
+  // пару дальше, и символ полки подставил бы торт («bday») или каплю. Спокойное
+  // лицо с тортом на тяжёлой теме — то же нарушение правила, что и улыбка.
+  const heavy = event === "heavy" || isHeavy(sourceText || "");
   const reactionEvent = heavy ? "saved" : reactionEventForCapture(event);
   return guard(reactionFor({
     event: reactionEvent,
@@ -2118,8 +2122,13 @@ function reactionForCapture(reply, sourceText) {
   if (reply.kind === "cancelled" || reply.kind === "done") return "saved";
   if (reply.kind === "created" || reply.kind === "moved" || reply.kind === "duplicate") {
     const item = reply.items?.[0];
+    // День рождения проверяем раньше срока: разбор всегда ставит такой записи
+    // час (9:00), поэтому ветка «timed» перехватывала её и тёплое лицо
+    // с тортом не показывалось никогда. Полка надёжнее слов: «днюха»
+    // и «годовщина» тоже попадают на bday, а строку с «день рожд» не содержат.
+    if (item?.shelf === "bday" || item?.type === "bday"
+      || /день\s*рожд|днюх|годовщин/i.test(sourceText || "")) return "birthday";
     if (item?.time || item?.remind || item?.alarm) return "timed";
-    if (/день\s*рожд/i.test(sourceText || "")) return "birthday";
     const doneToday = state.items.filter(i => i.done && !i.cancelled).length;
     return doneToday >= 5 ? "celebrate" : "saved";
   }

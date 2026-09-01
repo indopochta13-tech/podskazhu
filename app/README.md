@@ -45,6 +45,7 @@ lib/store.js       хранение в JSON-файле с атомарной з�
 lib/push.js        web push (VAPID)
 public/            PWA: интерфейс, service worker, манифест, иконки
 test/parse.test.js проверка разбора фраз
+test/corpus.test.js корпус живой речи: сплошной срез разбора
 test/api.test.js   проверка API на живом сервере
 tools/make_icons.py генератор иконок приложения
 ```
@@ -67,6 +68,7 @@ VC_PORT=8791 VC_DATA_DIR=/tmp/vc-dev npm start
 
 ```bash
 node test/parse.test.js               # разбор фраз
+node test/corpus.test.js              # корпус живой речи (VERBOSE=1 — по фразам)
 node test/sim-safety.test.js          # фильтр запрещённых тем
 node test/sim-coach.test.js           # разбор коуча и шкалы
 node test/api.test.js http://127.0.0.1:8791   # API на запущенном сервере

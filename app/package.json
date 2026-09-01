@@ -11,6 +11,7 @@
     "start": "node server.js",
     "lint": "eslint .",
     "test:parser": "node test/parse.test.js",
+    "test:corpus": "node test/corpus.test.js",
     "test:support": "node test/support.test.js"
   },
   "dependencies": {
