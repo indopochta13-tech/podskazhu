@@ -340,6 +340,19 @@ export function registerSharedListRoutes(route, dayKeyFromParts) {
     if (!invite || invite.status !== "pending") return { status: 404, body: { error: "Приглашение не найдено" } };
     if (invite.toId !== ctx.user.id) return { status: 403, body: { error: "Это не ваше приглашение" } };
     invite.status = "declined";
+
+    // Отказ с блокировкой: иначе человек отказывается, а приглашения
+    // приходят снова и снова — отказаться от навязчивого было нельзя.
+    if (ctx.body?.block) {
+      const from = db.users[invite.fromId];
+      // Формат тот же, что у блокировки из карточки записи: userId и code.
+      const list = Array.isArray(ctx.user.blocked) ? ctx.user.blocked : [];
+      if (!isBlockedBy(ctx.user, invite.fromId, from?.code) && list.length < 200) {
+        list.push({ userId: invite.fromId, code: from?.code || "", at: Date.now() });
+        ctx.user.blocked = list;
+      }
+    }
+
     save();
     return { status: 200, body: sharedListsPayload(ctx.user, dayKeyFromParts) };
   });
@@ -439,6 +452,11 @@ export function registerSharedListRoutes(route, dayKeyFromParts) {
     const minute = Number(ctx.body?.minute);
     let laterAt = Number(ctx.body?.at);
     if (!Number.isFinite(laterAt)) {
+      // Без часа считать нечего: zonedToUtc с NaN роняет запрос пятисотой,
+      // и человек видит «внутреннюю ошибку» вместо понятного ответа.
+      if (!Number.isFinite(hour)) {
+        return { status: 400, body: { error: "Во сколько напомнить?" } };
+      }
       const now = zonedParts(Date.now(), tz);
       laterAt = zonedToUtc({ year: now.year, month: now.month, day: now.day, hour, minute: minute || 0 }, tz);
     }
