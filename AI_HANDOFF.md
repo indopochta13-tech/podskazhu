@@ -187,7 +187,7 @@ ssh -i ~/.ssh/id_rei_do -o IdentitiesOnly=yes root@201.51.3.63 \
   'sh /opt/voicecapture/deploy/fix-public-perms.sh'
 ```
 
-Пользователь обновляет: в приложении **Настройки → Обновление**, либо скачивает APK по ссылке выше (ставить поверх).
+Пользователь обновляет через RuStore или скачивает APK по ссылке выше (ставить поверх).
 
 Package: `ru.soulvoice.app`. Domains в манифесте: `soulvoicee.ru`.
 

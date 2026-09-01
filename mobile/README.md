@@ -101,6 +101,20 @@ npm run apk:release   # подписанный APK
 npm run aab:release   # подписанный AAB для RuStore
 ```
 
+### Версия перед RuStore / APK
+
+Поднимайте **вместе** (один релиз — одно число везде):
+
+| Файл | Поля |
+|---|---|
+| `android/app/build.gradle` | `versionName`, `versionCode` |
+| `../app/public/app-version.json` | `versionName`, `versionCode`, `shellVersion`, `apkUrl` |
+| `../app/public/app.js` | `APP_VERSION`, `SW_VERSION` |
+| `../app/public/sw.js` | `SW_VERSION` |
+| `../app/public/index.html` | `__VC_SHELL_V`, `app.js?v=` |
+
+Сборка: `npm run aab:release` (RuStore) или `npm run apk:release` (прямая ссылка). RuStore берёт версию из манифеста AAB/APK. **В приложении нет кнопок обновления** — только RuStore или скачивание с сайта.
+
 `npm run www` собирает папку `www`: копирует веб-версию из `../app/public`, убирает service worker
 (в приложении он не нужен) и добавляет мост `native.js`. **Правки вносим в `../app/public`,
 а не в `www` — она пересоздаётся при каждой сборке.**

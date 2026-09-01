@@ -34,26 +34,11 @@
 </script>
 <script>
 (function () {
-  // До app.js: обновить SW и подтянуть свежий app.js. Старый кэш без silentStart
-  // показывал «Скажите, что напомнить» и не давал SW обновиться без входа.
+  // SW кэширует оболочку; без перезагрузок и баннеров «обновите интерфейс».
   // SWV и app.js?v= ниже — одно число; при смене поднимайте и SW_VERSION в sw.js / app.js.
-  window.__VC_SHELL_V = 131;
+  window.__VC_SHELL_V = 132;
   if (!("serviceWorker" in navigator)) return;
-  var SWV = String(window.__VC_SHELL_V);
-  var reloadKey = "vc.sw-reload-" + SWV;
-  navigator.serviceWorker.register("/sw.js?v=" + SWV).then(function (reg) {
-    reg.update();
-  }).catch(function () {});
-  navigator.serviceWorker.addEventListener("controllerchange", function () {
-    if (sessionStorage.getItem(reloadKey)) return;
-    sessionStorage.setItem(reloadKey, "1");
-    location.reload();
-  });
-  navigator.serviceWorker.addEventListener("message", function (event) {
-    if (event.data && event.data.type === "sw-activated" && String(event.data.version) !== SWV) {
-      location.reload();
-    }
-  });
+  navigator.serviceWorker.register("/sw.js?v=" + window.__VC_SHELL_V).catch(function () {});
 })();
 </script>
 </head>
@@ -105,6 +90,6 @@
     <main class="stage" id="stage"></main>
   </div>
 </template>
-<script src="/app.js?v=131" type="module"></script>
+<script src="/app.js?v=132" type="module"></script>
 </body>
 </html>

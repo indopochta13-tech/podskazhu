@@ -994,16 +994,6 @@ if (Capacitor.isNativePlatform()) {
         return { name: "", code: 0 };
       }
     },
-    installAppUpdate: async url => {
-      const full = url.startsWith("http")
-        ? url
-        : `${window.VC_API_BASE}${url.startsWith("/") ? url : `/${url}`}`;
-      const res = await UpdateBridge.install({ url: full });
-      if (res?.needPermission) {
-        await UpdateBridge.openInstallSettings();
-        throw new Error("Разрешите установку из этого приложения");
-      }
-    },
     share: async ({ title = "", text = "", url = "", dialogTitle = "Поделиться" } = {}) => {
       await Share.share({ title, text, url, dialogTitle });
     },

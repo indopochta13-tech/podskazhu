@@ -16,13 +16,7 @@ self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true }))
-      .then(clients => {
-        for (const client of clients) {
-          client.postMessage({ type: "sw-activated", version: SW_VERSION });
-        }
-      }),
+      .then(() => self.clients.claim()),
   );
 });
 

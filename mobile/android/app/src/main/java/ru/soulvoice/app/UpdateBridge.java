@@ -22,7 +22,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Скачивание и установка обновления APK поверх текущей версии.
+ * Версия установленного APK (для отображения в настройках).
+ * Самообновление убрано — обновления только через RuStore или ссылку на сайте.
  */
 @CapacitorPlugin(name = "UpdateBridge")
 public class UpdateBridge extends Plugin {

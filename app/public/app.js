@@ -1185,9 +1185,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.50";
+const APP_VERSION = "1.9.53";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 130;
+const SW_VERSION = 132;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -1195,28 +1195,9 @@ const DETAIL_FIELD_IDS = new Set([
 ]);
 const SHELF_PREF_FIELD_IDS = new Set(["pref-remind-h", "pref-remind-m", "pref-snooze-m"]);
 
-if (typeof window !== "undefined" && window.__VC_SHELL_V && window.__VC_SHELL_V !== SW_VERSION) {
-  location.reload();
-}
-
 function ensureServiceWorker() {
   if (NATIVE || !("serviceWorker" in navigator)) return;
-  const reloadKey = `vc.sw-reload-${SW_VERSION}`;
-  navigator.serviceWorker.register(`/sw.js?v=${SW_VERSION}`)
-    .then(reg => reg.update())
-    .catch(() => {});
-  if (document._vcSwHook) return;
-  document._vcSwHook = true;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem(reloadKey)) return;
-    sessionStorage.setItem(reloadKey, "1");
-    location.reload();
-  });
-  navigator.serviceWorker.addEventListener("message", event => {
-    if (event.data?.type === "sw-activated" && event.data.version !== SW_VERSION) {
-      location.reload();
-    }
-  });
+  navigator.serviceWorker.register(`/sw.js?v=${SW_VERSION}`).catch(() => {});
 }
 
 const state = {
@@ -1300,7 +1281,7 @@ const state = {
   billingPlanOpen: null,
   proShelfDemoModal: null,
   scrollToSubscription: false,
-  appUpdate: { checking: false, installing: false, shellReloading: false, info: null, error: "" },
+  apkVersion: "",
   online: navigator.onLine,
   shelfDraft: null,
 };
@@ -5825,127 +5806,18 @@ function applyWheel(key, idx) {
   scheduleDetailAutoSave();
 }
 
-function versionLines() {
-  const apk = state.appUpdate.info?.current?.name || APP_VERSION;
-  const shell = SW_VERSION;
-  return { apk, shell };
-}
-
 function settingsVersionFooterText() {
-  const { apk, shell } = versionLines();
-  return `${esc(apk)} · интерфейс v${shell}`;
+  const apk = state.apkVersion || APP_VERSION;
+  return `${esc(apk)} · интерфейс v${SW_VERSION}`;
 }
 
-function appUpdateSubline() {
-  const u = state.appUpdate;
-  const { apk, shell } = versionLines();
-  if (u.installing) return "скачиваю файл обновления…";
-  if (u.shellReloading) return "обновляю интерфейс…";
-  if (u.checking) return "проверяю на сервере…";
-  if (u.error) return esc(u.error);
-  if (u.info?.updateAvailable) {
-    return `APK ${esc(apk)} · доступна ${esc(u.info.latest.versionName)} · интерфейс v${shell}`;
-  }
-  if (u.info?.shellUpdateAvailable) {
-    const latestShell = Number(u.info.latest.shellVersion) || shell;
-    return `APK ${esc(apk)} актуален · интерфейс v${shell} → v${latestShell}`;
-  }
-  if (u.info && !u.info.updateAvailable && !u.info.shellUpdateAvailable) {
-    return `APK ${esc(apk)} · интерфейс v${shell} · всё актуально`;
-  }
-  return `APK ${apk} · интерфейс v${shell} · нажмите, чтобы проверить`;
-}
-
-function appUpdatePill() {
-  const u = state.appUpdate;
-  if (u.installing || u.shellReloading) return "…";
-  if (u.checking) return "…";
-  if (u.info?.updateAvailable) return "Обновить";
-  if (u.info?.shellUpdateAvailable) return "проверить";
-  return "проверить";
-}
-
-async function reloadShell() {
-  state.appUpdate = { ...state.appUpdate, shellReloading: true, error: "" };
-  if (state.screen === "settings") renderSettings();
+async function loadApkVersion() {
+  if (!NATIVE?.appBuild) return;
   try {
-    if ("serviceWorker" in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map(r => r.unregister()));
-    }
-    if ("caches" in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.filter(k => k.startsWith("vc-shell-")).map(k => caches.delete(k)));
-    }
-    for (const k of Object.keys(sessionStorage)) {
-      if (k.startsWith("vc.sw-reload-")) sessionStorage.removeItem(k);
-    }
-    location.reload();
-  } catch (err) {
-    state.appUpdate.error = err.message || "Не удалось обновить интерфейс";
-    state.appUpdate.shellReloading = false;
-    toast(state.appUpdate.error);
-    if (state.screen === "settings") renderSettings();
-  }
-}
-
-async function checkAppUpdate() {
-  state.appUpdate = { ...state.appUpdate, checking: true, error: "" };
-  if (state.screen === "settings") renderSettings();
-  try {
-    const manifest = await fetch(`${apiBase()}/app-version.json?_=${Date.now()}`, { cache: "no-store" }).then(res => {
-      if (!res.ok) throw new Error("Не удалось проверить обновление");
-      return res.json();
-    });
-    let current = { name: APP_VERSION, code: 0, shell: SW_VERSION };
-    if (NATIVE?.appBuild) {
-      const build = await NATIVE.appBuild();
-      current = { name: build.name || APP_VERSION, code: Number(build.code) || 0, shell: SW_VERSION };
-    }
-    const latestCode = Number(manifest.versionCode) || 0;
-    const latestShell = Number(manifest.shellVersion) || 0;
-    const updateAvailable = latestCode > current.code;
-    const shellUpdateAvailable = latestShell > 0 && latestShell > current.shell;
-    state.appUpdate.info = {
-      current,
-      latest: manifest,
-      updateAvailable,
-      shellUpdateAvailable,
-    };
-    if (!updateAvailable && !shellUpdateAvailable) toast("У тебя последняя версия");
-    else if (!updateAvailable && shellUpdateAvailable) toast("Доступно обновление интерфейса");
-  } catch (err) {
-    state.appUpdate.error = err.message || "Не удалось проверить";
-    toast(state.appUpdate.error);
-  } finally {
-    state.appUpdate.checking = false;
-    if (state.screen === "settings") renderSettings();
-  }
-}
-
-async function installAppUpdate(force) {
-  const info = state.appUpdate.info;
-  const canInstall = info?.updateAvailable || (force && info?.shellUpdateAvailable);
-  if (!canInstall) return checkAppUpdate();
-  const url = info.latest?.apkUrl || "/download/soulvoice.apk";
-  state.appUpdate = { ...state.appUpdate, installing: true, error: "" };
-  renderSettings();
-  try {
-    if (NATIVE?.installAppUpdate) {
-      await NATIVE.installAppUpdate(url);
-      toast("Подтвердите установку в системном окне");
-    } else {
-      const full = url.startsWith("http") ? url : `${apiBase()}${url}`;
-      if (NATIVE?.openUrl) await NATIVE.openUrl(full);
-      else window.open(full, "_blank", "noopener");
-      toast("Скачайте файл и установите поверх текущей версии");
-    }
-  } catch (err) {
-    state.appUpdate.error = err.message || "Не удалось установить";
-    toast(state.appUpdate.error);
-  } finally {
-    state.appUpdate.installing = false;
-    if (state.screen === "settings") renderSettings();
+    const build = await NATIVE.appBuild();
+    if (build.name) state.apkVersion = build.name;
+  } catch {
+    // ignore
   }
 }
 
@@ -6216,12 +6088,6 @@ function renderSettings() {
         </button>
 
         <div class="group-label">О приложении</div>
-        <!-- Обновление приложения убрано из настроек: APK ставится по ссылке.
-
-             Причина не только в простоте. Самообновление требует разрешения
-             REQUEST_INSTALL_PACKAGES — права ставить программы на телефон.
-             В магазине приложений оно вызывает вопросы у модерации: магазин
-             обновляет сам, зачем приложению это право. -->
 
         <a class="setting" href="${apiBase()}/privacy.html" data-doc="/privacy.html" target="_blank" rel="noopener">
           <div>
@@ -8382,7 +8248,7 @@ document.addEventListener("click", async event => {
         method: "POST",
         body: {
           text,
-          appVersion: APP_VERSION,
+          appVersion: state.apkVersion || APP_VERSION,
           platform: NATIVE ? "android" : "web",
         },
       });
@@ -9881,6 +9747,7 @@ async function boot() {
   watchForeground();
   ensureServiceWorker();
   await resolveApiBase();
+  await loadApkVersion();
   if (NATIVE?.syncApiBase) await NATIVE.syncApiBase();
   const params = new URLSearchParams(location.search);
   const billingReturn = params.get("billing") === "return";

@@ -14,7 +14,7 @@
 | Android `applicationId` | `ru.soulvoice.app` (было `ru.zapisala.app`) |
 | Домен | https://soulvoicee.ru |
 | Прод-сервер | `201.51.3.63`, SSH `~/.ssh/id_rei_do` |
-| Текущий релиз | **1.9.50** (`versionCode` 208, `shellVersion` 129) |
+| Текущий релиз | **1.9.53** (`versionCode` 211, `shellVersion` 132) |
 | Git | `master`, коммит `a9f466d`, **remote нет** |
 | Сборка APK | `cd mobile && npm run apk:release` |
 
@@ -81,7 +81,7 @@
 
 ```json
 // app/public/app-version.json
-{ "versionName": "1.9.50", "versionCode": 208, "shellVersion": 129 }
+{ "versionName": "1.9.53", "versionCode": 211, "shellVersion": 132 }
 ```
 
 Подробнее: [`AI_HANDOFF.md`](AI_HANDOFF.md), [`SERVER_ACCESS.md`](SERVER_ACCESS.md), [`SSH_SERVER.md`](SSH_SERVER.md).
@@ -96,7 +96,8 @@
 2. После изменений Capacitor-конфига: `npx cap sync android` (или `npm run sync` из `mobile/`).
 3. Перед деплоем APK — проверить сборку локально; перед деплоем сервера — `node test/parse.test.js`.
 4. Коммиты — **только по явной просьбе** владельца.
-5. Поднимать `versionCode` / `versionName` / `app-version.json` **одновременно** при релизе APK.
+5. Поднимать `versionCode` / `versionName` / `app-version.json` / `SW_VERSION` **одновременно** при релизе APK.
+6. **RuStore:** обновления только через магазин — в приложении нет кнопок «Обновить». Перед публикацией: поднять `versionName`+`versionCode` в `build.gradle` и `app-version.json`, собрать `npm run aab:release`; RuStore берёт версию из манифеста AAB/APK.
 
 ### ❌ Не делать
 
