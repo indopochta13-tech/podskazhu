@@ -1187,7 +1187,7 @@ const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
 const APP_VERSION = "1.9.65";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 145;
+const SW_VERSION = 146;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -6975,21 +6975,8 @@ function listOnboardHtml() {
       <p class="lead">Общие задачи с любым человеком: покупки, поручения, дела на день. Получатель отмечает «Сделал» — у вас зачёркнуто.</p>
       <div class="list-onboard-steps">
         <div class="list-onboard-step"><span class="list-onboard-num">1</span> Добавьте человека по ID</div>
-        <div class="list-onboard-step"><span class="list-onboard-num">2</span> Задайте прозвище — вкладка в карусели</div>
+        <div class="list-onboard-step"><span class="list-onboard-num">2</span> Задайте ник</div>
         <div class="list-onboard-step"><span class="list-onboard-num">3</span> Говорите задание голосом</div>
-      </div>
-      <div class="group-label">Примеры</div>
-      <div class="list-scenario">
-        <div class="name">Покупки с партнёром</div>
-        <div class="sub">«отправь жене молоко и хлеб»</div>
-      </div>
-      <div class="list-scenario">
-        <div class="name">Задача сотруднику</div>
-        <div class="sub">«отправь Кате подготовить отчёт» → Сделал / Позже</div>
-      </div>
-      <div class="list-scenario">
-        <div class="name">Дело ребёнку</div>
-        <div class="sub">«отправь Саше убрать комнату»</div>
       </div>
     </div>
   `;
