@@ -54,15 +54,25 @@ soulvoicee.ru, www.soulvoicee.ru {
 		reverse_proxy 127.0.0.1:8790
 	}
 
-	# Статика лендинга из /opt/site; всё остальное — Node (PWA-ассеты: app.js, styles.css, …).
-	@site file {
-		root /opt/site
-		try_files {path}
+	# Лендинг и юр. страницы — /opt/site (корень / явно, иначе Caddy file{} не находит index.html).
+	handle / {
+		root * /opt/site
+		rewrite * /index.html
+		file_server
 	}
-	handle @site {
+	handle /privacy.html {
 		root * /opt/site
 		file_server
 	}
+	handle /offer.html {
+		root * /opt/site
+		file_server
+	}
+	handle /shots/* {
+		root * /opt/site
+		file_server
+	}
+	# PWA-ассеты и прочее — Node.
 	handle {
 		reverse_proxy 127.0.0.1:8790
 	}

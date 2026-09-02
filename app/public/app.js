@@ -1185,9 +1185,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.59";
+const APP_VERSION = "1.9.60";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 139;
+const SW_VERSION = 141;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -1548,10 +1548,11 @@ async function api(path, { method = "GET", body, timeout = 20000, raw = false, a
   } finally {
     clearTimeout(timer);
   }
-  if (res.status === 401 && store.token) {
+  if (res.status === 401 && store.token && auth !== false) {
     // Не выкидываем сессию из‑за одноразового 401: токен мог ещё лежать в Preferences.
     // Очищаем только если и системное хранилище пусто — иначе после обновления APK
     // человек попадал на «Начать» и заводил пустой аккаунт, а виджет обнулялся.
+    // auth:false — перенос по ключу: 401 значит «ключ не подходит», а не потерянную сессию.
     throw new Error("Нужен вход");
   }
   if (raw) {
@@ -2714,7 +2715,10 @@ function renderBootError(err) {
     </section>
   `;
   document.getElementById("boot-retry")?.addEventListener("click", () => boot());
-  document.getElementById("boot-transfer")?.addEventListener("click", () => renderAuth());
+  document.getElementById("boot-transfer")?.addEventListener("click", () => {
+    state.authFlow = "restore";
+    renderAuthRestore();
+  });
 }
 
 async function authParsePhrase(text, source = "voice") {
