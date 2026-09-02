@@ -74,15 +74,46 @@ async function main() {
       as: stale,
     });
 
+    await api("/consent", { method: "POST", body: { version: "2026-08-31" }, as: stale });
+
     const restoreClean = await api("/restore", {
       method: "POST",
-      body: { key, tz: "Europe/Moscow", consent: "2026-08-31" },
+      body: { key, tz: "Europe/Moscow" },
       auth: false,
     });
     check("restore без Authorization", restoreClean.status === 200 && restoreClean.data?.token, String(restoreClean.status));
     check("тот же ID после restore", restoreClean.data?.user?.code === code, restoreClean.data?.user?.code);
     check("новый token после restore", restoreClean.data?.token && restoreClean.data.token !== stale);
     check("запись вернулась", restoreClean.data?.items?.some(i => /совещание/i.test(i.title)), JSON.stringify(restoreClean.data?.items?.map(i => i.title)));
+    check(
+      "согласие с сервера вернулось без body.consent",
+      restoreClean.data?.user?.settings?.consent?.version === "2026-08-31",
+      JSON.stringify(restoreClean.data?.user?.settings?.consent),
+    );
+
+    const fresh = await api("/start", { method: "POST", body: { tz: "Europe/Moscow" }, auth: false });
+    const freshKey = fresh.data.user.transferKey;
+    const noConsentRestore = await api("/restore", {
+      method: "POST",
+      body: { key: freshKey, tz: "Europe/Moscow" },
+      auth: false,
+    });
+    check(
+      "аккаунт без согласия — restore не подставляет его сам",
+      !noConsentRestore.data?.user?.settings?.consent?.version,
+      JSON.stringify(noConsentRestore.data?.user?.settings?.consent),
+    );
+
+    const withConsentBody = await api("/restore", {
+      method: "POST",
+      body: { key: freshKey, tz: "Europe/Moscow", consent: "2026-08-31" },
+      auth: false,
+    });
+    check(
+      "явный consent в restore записывает согласие",
+      withConsentBody.data?.user?.settings?.consent?.version === "2026-08-31",
+      JSON.stringify(withConsentBody.data?.user?.settings?.consent),
+    );
 
     const lower = await api("/restore", {
       method: "POST",

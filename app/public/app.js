@@ -1185,9 +1185,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.64";
+const APP_VERSION = "1.9.65";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 144;
+const SW_VERSION = 145;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -2686,7 +2686,8 @@ async function finishAccountDeletion() {
   `;
 }
 
-/** Восстановление по ключу — без старой сессии: иначе 401 превращается в «Нужен вход». */
+/** Восстановление по ключу — без старой сессии: иначе 401 превращается в «Нужен вход».
+ *  Согласие не шлём в теле: на сервере уже лежит user.settings.consent — клиент подхватит его из ответа. */
 async function restoreByTransferKey(key) {
   store.token = "";
   state.user = null;
@@ -2699,12 +2700,21 @@ async function restoreByTransferKey(key) {
   }
   const data = await api("/restore", {
     method: "POST",
-    body: { key, tz: tz(), consent: CONSENT_VERSION },
+    body: { key, tz: tz() },
     auth: false,
   });
   store.token = data.token;
   absorb(data);
   return data;
+}
+
+function finishTransferKeyRestore() {
+  state.authFlow = null;
+  store.onboarded = true;
+  state.screen = "shelves";
+  state.shelf = defaultShelf();
+  render();
+  setupPush(false);
 }
 
 async function silentStart(retries = 3) {
@@ -2983,13 +2993,7 @@ function renderAuth() {
   });
 
   viewEl.querySelector("#auth-restore")?.addEventListener("click", async (event) => {
-    const consentEl = viewEl.querySelector("#auth-restore-consent");
     const key = viewEl.querySelector('input[name="key"]')?.value.trim();
-    if (!consentEl?.checked) {
-      errorEl.textContent = "Отметьте согласие — без него нельзя продолжить";
-      consentEl?.focus();
-      return;
-    }
     if (!key) {
       errorEl.textContent = "Вставьте ключ переноса";
       return;
@@ -2998,11 +3002,7 @@ function renderAuth() {
     errorEl.textContent = "";
     try {
       await restoreByTransferKey(key);
-      store.onboarded = true;
-      state.screen = "shelves";
-      state.shelf = defaultShelf();
-      render();
-      setupPush(false);
+      finishTransferKeyRestore();
     } catch (err) {
       errorEl.textContent = err.message;
     } finally {
@@ -3024,11 +3024,6 @@ function renderAuthRestore() {
           <span>Ключ переноса</span>
           <input name="key" type="text" autocapitalize="characters" autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" />
         </label>
-        <label class="consent" for="auth-restore-consent">
-          <input type="checkbox" id="auth-restore-consent" />
-          <span>Согласен на обработку записей и принимаю
-            <a href="/privacy.html" data-doc="/privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.</span>
-        </label>
         <button class="btn block" id="auth-restore" type="button">Забрать свои записи</button>
         <button class="auth-switch" id="auth-restore-back" type="button">${consentPending() ? "Назад к условиям" : "Начать заново"}</button>
         <p class="auth-error" data-auth-error></p>
@@ -3042,13 +3037,7 @@ function renderAuthRestore() {
     else renderAuth();
   });
   viewEl.querySelector("#auth-restore")?.addEventListener("click", async (event) => {
-    const consentEl = viewEl.querySelector("#auth-restore-consent");
     const key = viewEl.querySelector('input[name="key"]')?.value.trim();
-    if (!consentEl?.checked) {
-      errorEl.textContent = "Отметьте согласие — без него нельзя продолжить";
-      consentEl?.focus();
-      return;
-    }
     if (!key) {
       errorEl.textContent = "Вставьте ключ переноса";
       return;
@@ -3057,12 +3046,7 @@ function renderAuthRestore() {
     errorEl.textContent = "";
     try {
       await restoreByTransferKey(key);
-      state.authFlow = null;
-      store.onboarded = true;
-      state.screen = "shelves";
-      state.shelf = defaultShelf();
-      render();
-      setupPush(false);
+      finishTransferKeyRestore();
     } catch (err) {
       errorEl.textContent = err.message;
     } finally {
@@ -6405,15 +6389,8 @@ function renderSettings() {
 
         <div class="settings-restore-block">
           <div class="settings-restore-title">Восстановить по ключу переноса</div>
-          <p class="settings-restore-hint">Пропустили «У меня есть ключ переноса» при входе? Вставьте ключ — записи вернутся на этот телефон.</p>
           <label class="field">
-            <span>Ключ переноса</span>
             <input id="settings-restore-key" name="restore-key" type="text" autocapitalize="characters" autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" />
-          </label>
-          <label class="consent" for="settings-restore-consent">
-            <input type="checkbox" id="settings-restore-consent" />
-            <span>Согласен на обработку записей и принимаю
-              <a href="/privacy.html" data-doc="/privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.</span>
           </label>
           <button class="btn block" id="settings-restore" type="button">Забрать свои записи</button>
           <p class="auth-error" data-settings-restore-error></p>
@@ -6524,15 +6501,9 @@ function renderSettings() {
   });
 
   document.getElementById("settings-restore")?.addEventListener("click", async (event) => {
-    const consentEl = document.getElementById("settings-restore-consent");
     const keyInput = document.getElementById("settings-restore-key");
     const errorEl = viewEl.querySelector("[data-settings-restore-error]");
     const key = keyInput?.value.trim();
-    if (!consentEl?.checked) {
-      errorEl.textContent = "Отметьте согласие — без него нельзя продолжить";
-      consentEl?.focus();
-      return;
-    }
     if (!key) {
       errorEl.textContent = "Вставьте ключ переноса";
       return;
@@ -6541,11 +6512,7 @@ function renderSettings() {
     errorEl.textContent = "";
     try {
       await restoreByTransferKey(key);
-      store.onboarded = true;
-      state.screen = "shelves";
-      state.shelf = defaultShelf();
-      render();
-      setupPush(false);
+      finishTransferKeyRestore();
       toast("Записи восстановлены");
     } catch (err) {
       errorEl.textContent = err.message;

@@ -1818,7 +1818,8 @@ route("POST", /^\/api\/restore$/, async (ctx) => {
   if (!user) return { status: 401, body: { error: "Ключ не подходит" } };
   const tz = safeZone(ctx.body.tz);
   if (tz && user.settings) user.settings.tz = tz;
-  applyConsent(user, ctx.body?.consent);
+  // Согласие с другого телефона не затираем. Новое принимаем только если клиент явно прислал consent.
+  if (ctx.body?.consent) applyConsent(user, ctx.body.consent);
   const token = issueToken(user.id);
   save();
   return { status: 200, body: { token, ...stateFor(user) } };

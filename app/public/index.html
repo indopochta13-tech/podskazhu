@@ -36,7 +36,7 @@
 (function () {
   // SW кэширует оболочку; без перезагрузок и баннеров «обновите интерфейс».
   // SWV и app.js?v= ниже — одно число; при смене поднимайте и SW_VERSION в sw.js / app.js.
-  window.__VC_SHELL_V = 144;
+  window.__VC_SHELL_V = 145;
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.register("/sw.js?v=" + window.__VC_SHELL_V).catch(function () {});
 })();
@@ -71,11 +71,6 @@
           <span>Ключ переноса</span>
           <input name="key" type="text" autocapitalize="characters" autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" />
         </label>
-        <label class="consent" for="auth-restore-consent">
-          <input type="checkbox" id="auth-restore-consent" />
-          <span>Согласен на обработку записей и принимаю
-            <a href="/privacy.html" data-doc="/privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.</span>
-        </label>
         <button class="btn block" id="auth-restore" type="button">Забрать свои записи</button>
       </div>
 
@@ -90,6 +85,6 @@
     <main class="stage" id="stage"></main>
   </div>
 </template>
-<script src="/app.js?v=144" type="module"></script>
+<script src="/app.js?v=145" type="module"></script>
 </body>
 </html>

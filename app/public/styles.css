@@ -3766,16 +3766,9 @@ html.vc-native {
 .settings-restore-title {
   font-size: 15px;
   font-weight: 600;
-  margin-bottom: 6px;
-}
-.settings-restore-hint {
-  font-size: 13px;
-  color: var(--muted);
-  line-height: 1.45;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .settings-restore-block .field { margin-bottom: 10px; }
-.settings-restore-block .consent { margin-bottom: 12px; }
 .settings-restore-block .auth-error { text-align: left; margin-top: 8px; }
 
 /* ── Оформление: тема и палитра ───────────────────────────── */
