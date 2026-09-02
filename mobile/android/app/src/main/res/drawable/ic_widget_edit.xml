@@ -1,17 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Карандаш — tint inkMuted через WidgetLook.applyRowIcons. -->
+<!-- Tabler outline: pencil — tint inkMuted через WidgetLook.applyRowIcons. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M14.85,4.2l4.95,4.95c0.45,0.45 0.45,1.18 0,1.63L9.2,21.38c-0.2,0.2 -0.47,0.32 -0.75,0.32H4.3c-0.55,0 -1,-0.45 -1,-1v-4.15c0,-0.28 0.11,-0.55 0.32,-0.75L13.22,4.2c0.45,-0.45 1.18,-0.45 1.63,0z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M4,20h4l10.5,-10.5a2.828,2.828 0,1 0,-4,-4l-10.5,10.5v4"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M13.55,6.05l4.4,4.4 -1.15,1.15 -4.4,-4.4z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M5.05,16.85l2.1,2.1 -2.55,0.45z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M13.5,6.5l4,4"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
 </vector>
