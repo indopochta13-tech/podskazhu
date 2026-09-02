@@ -101,7 +101,11 @@ const PRO_SHELF_IDS = new Set([
 ]);
 
 function isPro() {
-  return Boolean(state.billing?.active);
+  const b = state.billing;
+  if (!b?.active) return false;
+  const until = Number(b.until || 0);
+  if (until > 0 && until <= Date.now()) return false;
+  return true;
 }
 
 function isProShelf(id) {

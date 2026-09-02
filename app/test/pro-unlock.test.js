@@ -103,8 +103,8 @@ check("pro: isPro true", isPro(freeUser));
 check("pro: billingState.active true", billingState(freeUser).active);
 
 console.log("\n── Клиент: замки и промо снимаются при active ──");
-check("isPro читает state.billing.active",
-  /function isPro\(\)\s*\{\s*return Boolean\(state\.billing\?\.active\)/.test(appJs));
+check("isPro учитывает active и until",
+  /function isPro\(\)[\s\S]*?if \(!b\?\.active\) return false[\s\S]*?until <= Date\.now\(\)/.test(appJs));
 check("замок только когда !isPro()",
   /const locked = !isPro\(\)/.test(appJs));
 check("proShelfGated: pro снимает блок",

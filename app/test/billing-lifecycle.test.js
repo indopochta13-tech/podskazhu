@@ -185,6 +185,101 @@ async function main() {
       body: {},
     });
     check("новый аккаунт без покупок", wrongRestore.data?.active === false, wrongRestore.data?.plan);
+
+    // Раннее продление: оставшиеся дни прибавляются к новому периоду.
+    db = readDb(dir);
+    const threeDays = 3 * 86400000;
+    const month = 31 * 86400000;
+    const nearExpiry = Date.now() + threeDays;
+    db.users[uid].billing.until = nearExpiry;
+    if (db.purchases?.[payId]) db.purchases[payId].until = nearExpiry;
+    writeDb(dir, db);
+    child.kill("SIGKILL");
+    await sleep(400);
+    child = startServer(port, dir, secret);
+    if (!await waitReady(api)) throw new Error("сервер не перезапустился");
+
+    const preRenew = await api("/billing", { as: token });
+    check("перед продлением active", preRenew.data?.active === true, String(preRenew.data?.active));
+
+    await api("/billing/create-payment-prodamus", {
+      method: "POST",
+      as: token,
+      body: { productId: "pro_month" },
+    });
+    await sleep(400);
+    db = readDb(dir);
+    const renewPayId = Object.keys(db.billingPending || {}).find(id => id !== payId);
+    check("pending для продления", Boolean(renewPayId), renewPayId || "нет");
+
+    const hookRenew = await postWebhook(api, secret, {
+      order_id: renewPayId,
+      payment_status: "success",
+      sum: "299",
+    });
+    check("webhook продления → success", hookRenew.status === 200, String(hookRenew.data));
+    await sleep(400);
+
+    db = readDb(dir);
+    const stackedUntil = Number(db.users[uid].billing?.until || 0);
+    const expectStack = nearExpiry + month;
+    check("раннее продление: дни суммируются",
+      stackedUntil >= expectStack - 5000 && stackedUntil <= expectStack + 5000,
+      `got ${stackedUntil}, want ~${expectStack}`);
+
+    // После полного истечения restore не возвращает PRO.
+    db = readDb(dir);
+    const deadAt = Date.now() - 5000;
+    db.users[uid].billing.until = deadAt;
+    for (const p of Object.values(db.purchases || {})) {
+      if (p.userId === uid) p.until = deadAt;
+    }
+    writeDb(dir, db);
+    child.kill("SIGKILL");
+    await sleep(400);
+    child = startServer(port, dir, secret);
+    if (!await waitReady(api)) throw new Error("сервер не перезапустился");
+
+    const deadBilling = await api("/billing", { as: token });
+    check("полный expiry → active false", deadBilling.data?.active === false, String(deadBilling.data?.active));
+
+    const sportLocked = await api("/items", {
+      method: "POST",
+      as: token,
+      body: { type: "sport", shelf: "sport", title: "После expiry" },
+    });
+    check("expired: sport заблокирован", sportLocked.status === 403, String(sportLocked.status));
+
+    const deadRestore = await api("/billing/restore-purchases", {
+      method: "POST",
+      as: token,
+      body: {},
+    });
+    check("полный expiry: restore не активирует", deadRestore.data?.active === false, deadRestore.data?.plan);
+
+    // Оплата после истечения — новый период от «сейчас».
+    await api("/billing/create-payment-prodamus", {
+      method: "POST",
+      as: token,
+      body: { productId: "pro_month" },
+    });
+    await sleep(400);
+    db = readDb(dir);
+    const freshPayId = Object.keys(db.billingPending || {}).find(id =>
+      id !== payId && id !== renewPayId);
+    const beforeFresh = Date.now();
+    await postWebhook(api, secret, {
+      order_id: freshPayId,
+      payment_status: "success",
+      sum: "299",
+    });
+    await sleep(400);
+    db = readDb(dir);
+    const freshUntil = Number(db.users[uid].billing?.until || 0);
+    const expectFresh = beforeFresh + month;
+    check("после expiry: свежий период от now",
+      freshUntil >= expectFresh - 5000 && freshUntil <= expectFresh + 15000,
+      `got ${freshUntil}, want ~${expectFresh}`);
   } finally {
     child.kill("SIGKILL");
     fs.rmSync(dir, { recursive: true, force: true });
