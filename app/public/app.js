@@ -1186,7 +1186,7 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.62";
+const APP_VERSION = "1.9.63";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
 const SW_VERSION = 143;
 const AUTO_SAVE_MS = 400;
