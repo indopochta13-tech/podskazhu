@@ -257,7 +257,8 @@ export function normalizeTransferKey(value) {
 
 export function findUserByTransferKey(key) {
   const wanted = normalizeTransferKey(key);
-  if (wanted.length !== 20) return null;
+  // Новый ключ — 20 символов; старые длиннее, но сравниваем так же после нормализации.
+  if (wanted.length < 20) return null;
   return Object.values(db.users).find(u => normalizeTransferKey(u.transferKey) === wanted) || null;
 }
 

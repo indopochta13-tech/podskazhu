@@ -1187,7 +1187,7 @@ const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
 const APP_VERSION = "1.9.60";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 141;
+const SW_VERSION = 142;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -2672,6 +2672,22 @@ async function finishAccountDeletion() {
   `;
 }
 
+/** Восстановление по ключу — без старой сессии: иначе 401 превращается в «Нужен вход». */
+async function restoreByTransferKey(key) {
+  store.token = "";
+  if (NATIVE?.clearSession) {
+    try { await NATIVE.clearSession(); } catch { /* ignore */ }
+  }
+  const data = await api("/restore", {
+    method: "POST",
+    body: { key, tz: tz(), consent: CONSENT_VERSION },
+    auth: false,
+  });
+  store.token = data.token;
+  absorb(data);
+  return data;
+}
+
 async function silentStart(retries = 3) {
   let lastErr;
   for (let i = 0; i < retries; i += 1) {
@@ -2962,13 +2978,7 @@ function renderAuth() {
     event.currentTarget.disabled = true;
     errorEl.textContent = "";
     try {
-      const data = await api("/restore", {
-        method: "POST",
-        body: { key, tz: tz(), consent: CONSENT_VERSION },
-        auth: false,
-      });
-      store.token = data.token;
-      absorb(data);
+      await restoreByTransferKey(key);
       store.onboarded = true;
       state.screen = "shelves";
       state.shelf = defaultShelf();
@@ -3027,13 +3037,7 @@ function renderAuthRestore() {
     event.currentTarget.disabled = true;
     errorEl.textContent = "";
     try {
-      const data = await api("/restore", {
-        method: "POST",
-        body: { key, tz: tz(), consent: CONSENT_VERSION },
-        auth: false,
-      });
-      store.token = data.token;
-      absorb(data);
+      await restoreByTransferKey(key);
       state.authFlow = null;
       store.onboarded = true;
       state.screen = "shelves";
@@ -10054,15 +10058,39 @@ async function boot() {
   try {
     await loadAppState(params, { billingReturn });
   } catch (err) {
-    // Просроченный токен после обновления — пробуем восстановить из Preferences или /start.
+    // Просроченный токен после обновления — пробуем Preferences или /start.
+    // Если токен мёртвый (удалили аккаунт) — не заводим пустой аккаунт, даём ключ переноса.
     if (store.token && err.message === "Нужен вход") {
+      const badToken = store.token;
       store.token = "";
+      state.user = null;
+      state.items = [];
+      state.incoming = [];
+      state.contacts = [];
+      try { await NATIVE?.clearSession?.(); } catch { /* ignore */ }
       try { await NATIVE?.ensureToken?.(); } catch { /* ignore */ }
+      if (store.token && store.token === badToken) {
+        store.token = "";
+        try { await NATIVE?.clearSession?.(); } catch { /* ignore */ }
+        state.authFlow = null;
+        render();
+        requestStartupPermissions();
+        return;
+      }
       try {
         if (!store.token) await silentStart();
         await loadAppState(params, { billingReturn });
         return;
       } catch (retryErr) {
+        if (retryErr.message === "Нужен вход") {
+          store.token = "";
+          state.user = null;
+          try { await NATIVE?.clearSession?.(); } catch { /* ignore */ }
+          state.authFlow = null;
+          render();
+          requestStartupPermissions();
+          return;
+        }
         return renderBootError(retryErr);
       }
     }
