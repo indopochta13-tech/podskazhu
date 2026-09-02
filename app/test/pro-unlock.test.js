@@ -117,6 +117,13 @@ check("renderCare / renderHealth: промо за proShelfGated",
   /if \(proShelfGated\("care"\)\)/.test(appJs) && /if \(proShelfGated\("health"\)\)/.test(appJs));
 check("FAB не блокируется при isPro",
   /function shelfFabDemoBlocked[\s\S]*?if \(isPro\(\)\) return false/.test(appJs));
+check("предупреждение об окончании подписки в настройках",
+  /function billingExpirySettingsHint[\s\S]*?days > 7/.test(appJs)
+  && /Подписка заканчивается через/.test(appJs)
+  && /count\.дней\(days\)/.test(appJs));
+check("баннер продления на главном экране ≤3 дней",
+  /function proExpiryBannerHtml[\s\S]*?days > 3/.test(appJs)
+  && /data-pro-subscribe>Продлить/.test(appJs));
 
 for (const id of ["shared", "care", "sport", "health", "meters", "bills"]) {
   check(`полка ${id} — PRO + промо-текст`, isProShelf(id) && Boolean(PRO_SHELF_PROMO[id]));

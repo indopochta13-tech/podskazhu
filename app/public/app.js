@@ -1191,7 +1191,7 @@ const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
 const APP_VERSION = "1.9.68";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 149;
+const SW_VERSION = 150;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -3936,13 +3936,48 @@ function familySubBlockHtml() {
     </div>`;
 }
 
+function billingEffectiveUntil(b) {
+  if (!b?.active) return 0;
+  const fam = b.familySub;
+  if (fam?.until) return Number(fam.until || b.until || 0);
+  return Number(b.until || 0);
+}
+
+function billingExpiryDaysLeft(b) {
+  const until = billingEffectiveUntil(b);
+  if (!until) return Infinity;
+  const ms = until - Date.now();
+  if (ms <= 0) return 0;
+  return Math.ceil(ms / 86400000);
+}
+
+function billingExpirySettingsHint(b) {
+  if (!b?.active) return "";
+  const days = billingExpiryDaysLeft(b);
+  if (days > 7 || days <= 0) return "";
+  return `<div class="settings-sub-expiry">Подписка заканчивается через ${esc(count.дней(days))}</div>`;
+}
+
+function proExpiryBannerHtml() {
+  const b = state.billing;
+  if (!isPro() || !b) return "";
+  const days = billingExpiryDaysLeft(b);
+  if (days > 3 || days <= 0) return "";
+  return `
+    <div class="pro-expiry-banner" role="status">
+      <div class="pro-expiry-banner-text">Подписка заканчивается через ${esc(count.дней(days))}</div>
+      <button type="button" class="btn" data-pro-subscribe>Продлить</button>
+    </div>
+  `;
+}
+
 function billingActiveNote(b) {
   if (!b?.active) return "";
   const fam = b.familySub;
-  if (fam?.until) {
-    return `Тариф «Про» до ${esc(fmtUntil(fam.until || b.until))}${fam.isOwner ? " · семейная" : ""}`;
-  }
-  return `Тариф «Про» до ${esc(fmtUntil(b.until))}`;
+  const dateNote = fam?.until
+    ? `Тариф «Про» до ${esc(fmtUntil(fam.until || b.until))}${fam.isOwner ? " · семейная" : ""}`
+    : `Тариф «Про» до ${esc(fmtUntil(b.until))}`;
+  return dateNote + billingExpirySettingsHint(b);
 }
 
 function settingsSubscriptionHtml() {
@@ -5121,6 +5156,7 @@ function renderCalendarMain() {
   viewEl.innerHTML = `
     <section class="screen">
       ${offlineBar()}
+      ${proExpiryBannerHtml()}
       ${calendarStripHtml()}
       ${observationBanner()}
       ${promptCard()}
