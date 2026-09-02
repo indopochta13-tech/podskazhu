@@ -1,4 +1,4 @@
-const SW_VERSION = 138;
+const SW_VERSION = 139;
 const CACHE = `vc-shell-v${SW_VERSION}`;
 const SHELL = ["/", "/styles.css?v=104", `/app.js?v=${SW_VERSION}`, "/sounds-catalog.js", "/ui-sounds.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 

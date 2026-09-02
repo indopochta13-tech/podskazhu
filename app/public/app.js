@@ -1185,9 +1185,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.58";
+const APP_VERSION = "1.9.59";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 138;
+const SW_VERSION = 139;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -2627,6 +2627,50 @@ function offlineBar() {
   return state.online ? "" : '<div class="offline-bar">Нет сети — записи уйдут, когда появится связь</div>';
 }
 
+/** После удаления аккаунта — стираем сессию на телефоне, чтобы при следующем запуске был чистый старт. */
+async function wipeLocalSessionAfterDelete() {
+  state.authFlow = null;
+  state.authPreview = null;
+  state.user = null;
+  state.items = [];
+  state.incoming = [];
+  state.contacts = [];
+  state.chat = [];
+  state.billingPendingId = "";
+  store.token = "";
+  store.onboarded = false;
+  store.keySaved = false;
+  store.chat = [];
+  store.queue = [];
+  saveBillingPendingId("");
+  try { localStorage.removeItem("vc.privateTitles"); } catch { /* ignore */ }
+  try { localStorage.removeItem("vc.calendarDay"); } catch { /* ignore */ }
+  try { localStorage.removeItem("vc.calendarKey"); } catch { /* ignore */ }
+  try { localStorage.removeItem("vc.supportSeen"); } catch { /* ignore */ }
+  if (NATIVE?.clearSession) {
+    try { await NATIVE.clearSession(); } catch { /* ignore */ }
+  } else if (NATIVE?.updateWidget) {
+    NATIVE.updateWidget({}, [], {});
+  }
+}
+
+async function finishAccountDeletion() {
+  await wipeLocalSessionAfterDelete();
+  toast("Аккаунт удалён");
+  if (NATIVE?.exitApp) {
+    setTimeout(() => NATIVE.exitApp(), 700);
+    return;
+  }
+  appEl.innerHTML = `
+    <section class="screen auth">
+      <div class="auth-inner">
+        <h1 class="auth-invite">Аккаунт удалён</h1>
+        <p class="auth-example">Закройте вкладку и откройте приложение снова — покажем условия и предложим ключ переноса.</p>
+      </div>
+    </section>
+  `;
+}
+
 async function silentStart(retries = 3) {
   let lastErr;
   for (let i = 0; i < retries; i += 1) {
@@ -2881,6 +2925,7 @@ function mountAuthTryHandlers() {
 
 function renderAuth() {
   viewEl = appEl;
+  if (state.authFlow === "restore") return renderAuthRestore();
   if (state.authFlow === "preview") return renderAuthPreview();
   if (state.authFlow === "notify") return renderAuthNotify();
   if (state.authFlow === "widget") return renderAuthWidget();
@@ -2933,6 +2978,70 @@ function renderAuth() {
   });
 
   mountAuthTryHandlers();
+}
+
+function renderAuthRestore() {
+  viewEl = appEl;
+  viewEl.innerHTML = `
+    <section class="screen auth">
+      <div class="auth-inner">
+        <h1 class="auth-invite">Ключ переноса</h1>
+        <p class="auth-example">Вставьте ключ, который показывали в настройках — записи вернутся на этот телефон.</p>
+        <label class="field">
+          <span>Ключ переноса</span>
+          <input name="key" type="text" autocapitalize="characters" autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" />
+        </label>
+        <label class="consent" for="auth-restore-consent">
+          <input type="checkbox" id="auth-restore-consent" />
+          <span>Согласен на обработку записей и принимаю
+            <a href="/privacy.html" data-doc="/privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.</span>
+        </label>
+        <button class="btn block" id="auth-restore" type="button">Забрать свои записи</button>
+        <button class="auth-switch" id="auth-restore-back" type="button">${consentPending() ? "Назад к условиям" : "Начать заново"}</button>
+        <p class="auth-error" data-auth-error></p>
+      </div>
+    </section>
+  `;
+  const errorEl = viewEl.querySelector("[data-auth-error]");
+  viewEl.querySelector("#auth-restore-back")?.addEventListener("click", () => {
+    state.authFlow = null;
+    if (consentPending()) renderConsent();
+    else renderAuth();
+  });
+  viewEl.querySelector("#auth-restore")?.addEventListener("click", async (event) => {
+    const consentEl = viewEl.querySelector("#auth-restore-consent");
+    const key = viewEl.querySelector('input[name="key"]')?.value.trim();
+    if (!consentEl?.checked) {
+      errorEl.textContent = "Отметьте согласие — без него нельзя продолжить";
+      consentEl?.focus();
+      return;
+    }
+    if (!key) {
+      errorEl.textContent = "Вставьте ключ переноса";
+      return;
+    }
+    event.currentTarget.disabled = true;
+    errorEl.textContent = "";
+    try {
+      const data = await api("/restore", {
+        method: "POST",
+        body: { key, tz: tz(), consent: CONSENT_VERSION },
+        auth: false,
+      });
+      store.token = data.token;
+      absorb(data);
+      state.authFlow = null;
+      store.onboarded = true;
+      state.screen = "shelves";
+      state.shelf = defaultShelf();
+      render();
+      setupPush(false);
+    } catch (err) {
+      errorEl.textContent = err.message;
+    } finally {
+      event.currentTarget.disabled = false;
+    }
+  });
 }
 
 function notifPermission() {
@@ -6448,6 +6557,7 @@ function renderConsent() {
           <a href="${apiBase()}/offer.html" data-doc="/offer.html" target="_blank" rel="noopener">условия подписки</a>
         </p>
         <button class="btn block" id="consent-accept" type="button">Продолжить</button>
+        <button class="auth-switch" id="consent-restore" type="button">У меня есть ключ переноса</button>
         <p class="auth-error" data-consent-error></p>
       </div>
     </section>
@@ -8271,6 +8381,11 @@ document.addEventListener("click", async event => {
     return sendFromComposer();
   }
 
+  if (event.target.closest("#consent-restore")) {
+    state.authFlow = "restore";
+    return renderAuthRestore();
+  }
+
   if (event.target.closest("#consent-accept")) {
     const box = document.getElementById("consent-ok");
     const errorEl = document.querySelector("[data-consent-error]");
@@ -9545,17 +9660,7 @@ document.addEventListener("click", async event => {
     } catch (err) {
       return toast(err.message);
     }
-    store.token = "";
-    store.onboarded = false;
-    store.keySaved = false;
-    state.user = null;
-    state.items = [];
-    state.incoming = [];
-    state.contacts = [];
-    state.chat = [];
-    store.chat = [];
-    toast("Аккаунт удалён");
-    return renderAuth();
+    return finishAccountDeletion();
   }
 
   if (event.target.closest("#detail-done")) {

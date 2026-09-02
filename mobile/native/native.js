@@ -855,7 +855,14 @@ async function keepTokenSafe() {
   const removeItem = localStorage.removeItem.bind(localStorage);
   localStorage.removeItem = key => {
     removeItem(key);
-    if (key === "vc.token") Preferences.remove({ key: "token" }).catch(() => {});
+    if (key === "vc.token") {
+      Preferences.remove({ key: "token" }).catch(() => {});
+      WidgetBridge.update({
+        payload: "",
+        apiBase: window.VC_API_BASE || "",
+        token: "",
+      }).catch(() => {});
+    }
   };
 }
 
@@ -969,6 +976,20 @@ if (Capacitor.isNativePlatform()) {
         // ignore
       }
       return localStorage.getItem("vc.token") || "";
+    },
+    clearSession: async () => {
+      try { localStorage.removeItem("vc.token"); } catch { /* ignore */ }
+      try { await Preferences.remove({ key: "token" }); } catch { /* ignore */ }
+      try {
+        await WidgetBridge.update({
+          payload: "",
+          apiBase: String(window.VC_API_BASE || "").replace(/\/+$/, ""),
+          token: "",
+        });
+      } catch { /* ignore */ }
+    },
+    exitApp: () => {
+      App.exitApp();
     },
     syncApiBase: async () => {
       try {
