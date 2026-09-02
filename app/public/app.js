@@ -1185,9 +1185,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.57";
+const APP_VERSION = "1.9.58";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 137;
+const SW_VERSION = 138;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -2517,8 +2517,9 @@ function shelfStripPillHtml(shelf, { locked = false, badge = 0 } = {}) {
   const count = badge > 0
     ? `<span class="shelf-pill-badge">${badge > 99 ? "99+" : badge}</span>`
     : "";
+  const ico = `<span class="shelf-pill-ico">${stripShelfGlyph(shelf.id)}${lock}</span>`;
   return `<button type="button" class="${cls.join(" ")}" ${attrs}
-    aria-label="${esc(shelf.label)}" aria-current="${active ? "page" : "false"}">${stripShelfGlyph(shelf.id)}${lock}${count}</button>`;
+    aria-label="${esc(shelf.label)}" aria-current="${active ? "page" : "false"}">${ico}${count}</button>`;
 }
 
 /**

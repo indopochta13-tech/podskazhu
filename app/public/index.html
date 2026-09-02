@@ -36,7 +36,7 @@
 (function () {
   // SW кэширует оболочку; без перезагрузок и баннеров «обновите интерфейс».
   // SWV и app.js?v= ниже — одно число; при смене поднимайте и SW_VERSION в sw.js / app.js.
-  window.__VC_SHELL_V = 137;
+  window.__VC_SHELL_V = 138;
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.register("/sw.js?v=" + window.__VC_SHELL_V).catch(function () {});
 })();
@@ -90,6 +90,6 @@
     <main class="stage" id="stage"></main>
   </div>
 </template>
-<script src="/app.js?v=137" type="module"></script>
+<script src="/app.js?v=138" type="module"></script>
 </body>
 </html>

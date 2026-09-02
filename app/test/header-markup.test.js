@@ -37,8 +37,12 @@ check("полоса рисуется как nav без обёрток",
   "разметка полосы не переписана — вероятно, патч не накатан");
 
 check("в кнопке полки только значок",
-  !app.includes("shelf-pill-cap") && !app.includes("shelf-pill-ico"),
-  "остались обёртки подписи или значка: полоса будет шире и перенесётся");
+  !app.includes("shelf-pill-cap"),
+  "осталась обёртка подписи — полоса будет шире и перенесётся");
+
+check("замок PRO внутри обёртки значка",
+  app.includes('class="shelf-pill-ico"') && app.includes('class="shelf-pill-lock"'),
+  "замок не привязан к углу значка — обрежется overflow полосы");
 
 check("подписей и времени в полосе нет",
   !app.includes("shelfStripCaption"),
@@ -60,6 +64,18 @@ check("облако на FAB монтируется после каждой по
 // ── Стили полосы ──────────────────────────────────────────────────────
 
 const strip = rule(".shelf-strip");
+check("полоса PRO не даёт overflow на календарь",
+  !rule(".shelf-strip--pro").includes("overflow: visible")
+    && rule(".shelf-strip").includes("overflow: hidden"),
+  "overflow:visible на полосе PRO — замки уедут на даты");
+
+const lockRule = rule(".shelf-pill-lock");
+check("замок PRO — accent и внутри кнопки",
+  lockRule.includes("color: var(--accent)")
+    && css.includes(".shelf-pill-ico")
+    && lockRule.includes("z-index"),
+  "замок приглушён или обрезается полосой");
+
 check("полоса не переносится",
   strip.includes("flex-wrap: nowrap"),
   "без nowrap значки уйдут на вторую строку");
