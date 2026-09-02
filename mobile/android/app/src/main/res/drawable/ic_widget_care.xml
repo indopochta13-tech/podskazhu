@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Tabler outline: heart — tint через WidgetLook -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M12,21.5c-0.3,0 -0.6,-0.1 -0.9,-0.3C8.8,19.6 4,16.1 4,11.5 4,8.5 6.2,6.5 8.8,6.5c1.5,0 2.9,0.7 3.8,1.8 0.9,-1.1 2.3,-1.8 3.8,-1.8 2.6,0 4.8,2 4.8,5 0,4.6 -4.8,8.1 -7.1,9.7 -0.3,0.2 -0.6,0.3 -0.9,0.3z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M7.502,19.423c2.602,2.105 6.395,2.105 8.996,0c2.602,-2.105 3.262,-5.708 1.566,-8.546l-4.89,-7.26c-0.42,-0.625 -1.287,-0.803 -1.936,-0.397a1.376,1.376 0,0 0,-0.41,0.397l-4.893,7.26c-1.695,2.838 -1.035,6.441 1.567,8.546"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
 </vector>

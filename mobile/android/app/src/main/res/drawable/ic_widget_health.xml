@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Tabler outline: pill — tint через WidgetLook -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M8.5,5.5l3.5,3.5 3.5,-3.5 3.5,3.5 -3.5,3.5 3.5,3.5 -3.5,3.5 -3.5,-3.5 -3.5,3.5 -3.5,-3.5 3.5,-3.5 -3.5,-3.5z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M4.5,12.5l8,-8a4.94,4.94 0,0 1,7,7l-8,8a4.94,4.94 0,0 1,-7,-7"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M8.5,8.5l7,7"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
 </vector>

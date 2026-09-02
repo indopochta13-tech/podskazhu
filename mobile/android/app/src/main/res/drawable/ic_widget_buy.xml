@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Tabler outline: shopping-bag — tint через WidgetLook -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M7,8.5V7a5,5 0,0 1,10 0v1.5h2.2L20,20H4L4.8,8.5H7zM9,7a3,3 0,0 1,6 0v1.5H9V7z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M6.331,8h11.339a2,2 0,0 1,1.977,2.304l-1.255,8.152a3,3 0,0 1,-2.966,2.544h-6.852a3,3 0,0 1,-2.965,-2.544l-1.255,-8.152a2,2 0,0 1,1.977,-2.304"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M9,11v-5a3,3 0,0 1,6,0v5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
 </vector>

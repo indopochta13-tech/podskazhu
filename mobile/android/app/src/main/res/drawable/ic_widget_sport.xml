@@ -1,10 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Tabler outline: run — tint через WidgetLook -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M12,4.5a2.2,2.2 0,1 0,0.001,4.401A2.2,2.2 0,0 0,12 4.5zM6.5,17.5l3,-1 1.5,5.5 2.5,-1.5 -1.5,-6 3.5,-1.5 3,1.5 -1.5,6 2.5,1.5 1.5,-5.5 3,1 -1,-3.5 -5,-2 -3.5,1.5 -3,-1.5 -5,2 -1,3.5z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M11.007,5a2,2 0,1 0,4,0a2,2 0,1 0,-4,0"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M4,17l5,1l0.75,-1.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M15,21v-4l-4,-3l1,-6"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M7,12v-3l5,-1l3,3l3,1"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
 </vector>

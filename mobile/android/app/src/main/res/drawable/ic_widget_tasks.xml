@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Tabler outline: circle-check — tint через WidgetLook -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M12,3a9,9 0,1 0,0.001,18.001A9,9 0,0 0,12 3zM10.2,15.8L7.4,13l1.1,-1.1 1.7,1.7 4.3,-4.3 1.1,1.1 -5.4,5.4z" />
+        android:fillColor="@android:color/transparent"
+        android:pathData="M3,12a9,9 0,1 0,18,0a9,9 0,1 0,-18,0"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M9,12l2,2l4,-4"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="2" />
 </vector>
