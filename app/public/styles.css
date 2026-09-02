@@ -2261,35 +2261,56 @@ a.setting { text-decoration: none; color: inherit; }
   line-height: 1.4;
 }
 .settings-sub-expiry {
+  display: block;
+  width: 100%;
   margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
   color: var(--warn);
   line-height: 1.35;
+  cursor: pointer;
 }
 .pro-expiry-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  top: calc(var(--safe-top) + 10px);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 8px 16px 0;
-  padding: 10px 12px;
-  border-radius: 12px;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: var(--radius);
   background: var(--warn-soft);
-  border: 1px solid color-mix(in srgb, var(--warn) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 22%, transparent);
+  box-shadow: var(--shadow-float);
+  z-index: 65;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.2s, transform 0.2s;
+  color: inherit;
+  cursor: pointer;
 }
+.pro-expiry-banner.on { opacity: 1; transform: translateY(0); }
 .pro-expiry-banner-text {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
   color: var(--warn);
   line-height: 1.35;
+  text-align: center;
 }
-.pro-expiry-banner .btn {
-  flex-shrink: 0;
-  padding: 8px 12px;
-  font-size: 13px;
+@media (min-width: 680px) {
+  .pro-expiry-banner {
+    left: 50%;
+    right: auto;
+    width: min(420px, calc(100vw - 24px));
+    margin-left: calc(min(420px, calc(100vw - 24px)) / -2);
+  }
 }
 .family-id-disc {
   min-width: 42px;

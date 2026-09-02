@@ -122,8 +122,12 @@ check("предупреждение об окончании подписки в 
   && /Подписка заканчивается через/.test(appJs)
   && /count\.дней\(days\)/.test(appJs));
 check("баннер продления на главном экране ≤3 дней",
-  /function proExpiryBannerHtml[\s\S]*?days > 3/.test(appJs)
-  && /data-pro-subscribe>Продлить/.test(appJs));
+  /function syncProExpiryBanner[\s\S]*?days > 3/.test(appJs)
+  && /PRO_EXPIRY_BANNER_DISMISSED_KEY/.test(appJs)
+  && !/data-pro-subscribe>Продлить/.test(appJs));
+check("подсказка в настройках закрывается по нажатию",
+  /data-pro-expiry-dismiss="settings"/.test(appJs)
+  && /PRO_EXPIRY_SETTINGS_DISMISSED_KEY/.test(appJs));
 
 for (const id of ["shared", "care", "sport", "health", "meters", "bills"]) {
   check(`полка ${id} — PRO + промо-текст`, isProShelf(id) && Boolean(PRO_SHELF_PROMO[id]));

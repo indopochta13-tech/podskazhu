@@ -1191,7 +1191,7 @@ const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
 const APP_VERSION = "1.9.68";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 150;
+const SW_VERSION = 151;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -2583,6 +2583,7 @@ function render() {
     return;
   }
   renderDeferred = false;
+  clearProExpiryBanner();
   if (state.authFlow) {
     viewEl = appEl;
     return renderAuth();
@@ -3951,24 +3952,58 @@ function billingExpiryDaysLeft(b) {
   return Math.ceil(ms / 86400000);
 }
 
+const PRO_EXPIRY_BANNER_DISMISSED_KEY = "vc.proExpiryBannerDismissed";
+const PRO_EXPIRY_SETTINGS_DISMISSED_KEY = "vc.proExpirySettingsDismissed";
+
+function proExpiryDismissed(storageKey, until) {
+  try {
+    return localStorage.getItem(storageKey) === String(Number(until) || 0);
+  } catch {
+    return false;
+  }
+}
+
+function dismissProExpiryNotice(storageKey, until) {
+  try {
+    localStorage.setItem(storageKey, String(Number(until) || 0));
+  } catch { /* ignore */ }
+}
+
 function billingExpirySettingsHint(b) {
   if (!b?.active) return "";
   const days = billingExpiryDaysLeft(b);
   if (days > 7 || days <= 0) return "";
-  return `<div class="settings-sub-expiry">Подписка заканчивается через ${esc(count.дней(days))}</div>`;
+  const until = billingEffectiveUntil(b);
+  if (proExpiryDismissed(PRO_EXPIRY_SETTINGS_DISMISSED_KEY, until)) return "";
+  return `<button type="button" class="settings-sub-expiry" data-pro-expiry-dismiss="settings">Подписка заканчивается через ${esc(count.дней(days))}</button>`;
 }
 
-function proExpiryBannerHtml() {
+function clearProExpiryBanner() {
+  document.getElementById("pro-expiry-banner")?.remove();
+}
+
+function syncProExpiryBanner() {
+  clearProExpiryBanner();
   const b = state.billing;
-  if (!isPro() || !b) return "";
+  if (!isPro() || !b) return;
+  const until = billingEffectiveUntil(b);
   const days = billingExpiryDaysLeft(b);
-  if (days > 3 || days <= 0) return "";
-  return `
-    <div class="pro-expiry-banner" role="status">
-      <div class="pro-expiry-banner-text">Подписка заканчивается через ${esc(count.дней(days))}</div>
-      <button type="button" class="btn" data-pro-subscribe>Продлить</button>
-    </div>
-  `;
+  if (days > 3 || days <= 0) return;
+  if (proExpiryDismissed(PRO_EXPIRY_BANNER_DISMISSED_KEY, until)) return;
+
+  const el = document.createElement("button");
+  el.id = "pro-expiry-banner";
+  el.type = "button";
+  el.className = "pro-expiry-banner";
+  el.setAttribute("role", "status");
+  el.innerHTML = `<span class="pro-expiry-banner-text">Подписка заканчивается через ${esc(count.дней(days))}</span>`;
+  el.addEventListener("click", () => {
+    dismissProExpiryNotice(PRO_EXPIRY_BANNER_DISMISSED_KEY, until);
+    el.classList.remove("on");
+    setTimeout(() => el.remove(), 200);
+  });
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("on"));
 }
 
 function billingActiveNote(b) {
@@ -5156,7 +5191,6 @@ function renderCalendarMain() {
   viewEl.innerHTML = `
     <section class="screen">
       ${offlineBar()}
-      ${proExpiryBannerHtml()}
       ${calendarStripHtml()}
       ${observationBanner()}
       ${promptCard()}
@@ -5175,6 +5209,7 @@ function renderCalendarMain() {
     state.highlightId = null;
   }
   mountShelfMicFab();
+  syncProExpiryBanner();
 }
 
 // Строка закладок одна на все корневые экраны: полки, будильник, наборы.
@@ -8869,6 +8904,12 @@ document.addEventListener("click", async event => {
   if (event.target.closest("[data-pro-subscribe]")) {
     openProSubscription();
     return;
+  }
+
+  if (event.target.closest("[data-pro-expiry-dismiss]")) {
+    const until = billingEffectiveUntil(state.billing);
+    dismissProExpiryNotice(PRO_EXPIRY_SETTINGS_DISMISSED_KEY, until);
+    return render();
   }
 
   if (event.target.closest("#home-widget-toggle")) {
