@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "test:parser": "node test/parse.test.js",
     "test:corpus": "node test/corpus.test.js",
-    "test:support": "node test/support.test.js"
+    "test:support": "node test/support.test.js",
+    "test:restore": "node test/restore.test.js"
   },
   "dependencies": {
     "firebase-admin": "^13.6.0",

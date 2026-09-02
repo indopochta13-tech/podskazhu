@@ -35,6 +35,7 @@ const ICONS = {
   send: `<svg ${A}><path d="M10 14l11 -11" /><path d="M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5" /></svg>`,
   play: `<svg ${A}><path d="M7 4v16l13 -8z" /></svg>`,
   stop: `<svg ${A}><path d="M5 5m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z" /></svg>`,
+  share: `<svg ${A}><path d="M13 4v4c-6.575 1.028 -9.02 6.788 -10 12c-.037 .206 0 .333 .222 .556s.341 .278 .547 .361c.206 .074 .348 .074 .555 .074c.396 0 .72 -.177 .945 -.483c1.028 -1.44 2.155 -3.17 4.221 -4.378c.328 -.216 .583 -.344 .875 -.483v4a.997 .997 0 0 0 1.414 1.414l6 -6a.997 .997 0 0 0 0 -1.414l-6 -6a.997 .997 0 0 0 -1.414 0l-.083 .094a1 1 0 0 0 .083 1.32z" /></svg>`,
 };
 
 const MONTHS_FULL = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
@@ -1185,9 +1186,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.60";
+const APP_VERSION = "1.9.62";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 142;
+const SW_VERSION = 143;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -1338,11 +1339,11 @@ function toast(message, action = null) {
 
 /** Системное «Поделиться»: Capacitor Share → Web Share API → буфер обмена. */
 async function shareNative({ title = "", text = "", url = "", dialogTitle = "Поделиться" } = {}) {
-  const payload = { title, text, url, dialogTitle };
+  const payload = { title, text, url: url || undefined, dialogTitle };
   if (NATIVE?.share) {
     try {
       await NATIVE.share(payload);
-      return;
+      return "native";
     } catch (err) {
       if (err?.name === "AbortError" || /cancel/i.test(String(err?.message || ""))) throw err;
     }
@@ -1350,7 +1351,7 @@ async function shareNative({ title = "", text = "", url = "", dialogTitle = "П�
   if (navigator.share) {
     try {
       await navigator.share({ title, text, url: url || undefined });
-      return;
+      return "web";
     } catch (err) {
       if (err?.name === "AbortError") throw err;
     }
@@ -1358,7 +1359,21 @@ async function shareNative({ title = "", text = "", url = "", dialogTitle = "П�
   const clip = text || url;
   if (!clip) throw new Error("nothing to share");
   await navigator.clipboard.writeText(clip);
-  toast("Ключ скопирован");
+  toast("Поделиться недоступно — ключ скопирован");
+  return "clipboard";
+}
+
+async function shareTransferKey() {
+  const key = state.user?.transferKey || "";
+  if (!key) return toast("Ключ переноса пока недоступен");
+  const text = `Ключ переноса SoulVoice: ${key}`;
+  try {
+    await shareNative({ title: "Ключ переноса SoulVoice", text });
+  } catch (err) {
+    if (err?.name !== "AbortError" && !/cancel/i.test(String(err?.message || ""))) {
+      toast("Не удалось поделиться");
+    }
+  }
 }
 
 function esc(value) {
@@ -2675,6 +2690,11 @@ async function finishAccountDeletion() {
 /** Восстановление по ключу — без старой сессии: иначе 401 превращается в «Нужен вход». */
 async function restoreByTransferKey(key) {
   store.token = "";
+  state.user = null;
+  state.items = [];
+  state.incoming = [];
+  state.contacts = [];
+  state.lists = [];
   if (NATIVE?.clearSession) {
     try { await NATIVE.clearSession(); } catch { /* ignore */ }
   }
@@ -4492,7 +4512,7 @@ function buildPermissionIssues() {
       button: "Включить",
     });
   }
-  if (notifPermission() !== "granted") {
+  if (notifPermission() !== "granted" && notifPermission() !== "unsupported") {
     issues.push({
       id: "notif",
       title: "Уведомления выключены",
@@ -4509,6 +4529,15 @@ function buildPermissionIssues() {
     });
   }
   return issues;
+}
+
+/** Точка на ⚙️ — только в APK и только явные проблемы, не «ещё не спрашивали». */
+function permissionsBadgeActive() {
+  if (!NATIVE) return false;
+  if (state.micState === "denied") return true;
+  if (notifPermission() === "denied") return true;
+  if (NATIVE?.batteryStatus && state.batteryIgnored === false && notifPermission() === "granted") return true;
+  return false;
 }
 
 function permissionIssue(id) {
@@ -4548,8 +4577,12 @@ function permissionsSectionHtml() {
       </div>
       <button type="button" class="btn ghost perm-issue-btn" data-perm-action="battery">${batteryIssue ? esc(batteryIssue.button) : "Открыть настройки"}</button>
     </div>` : "";
+  const dotHint = NATIVE && permissionsBadgeActive()
+    ? `<p class="lead perm-dot-hint">Точка на ⚙️ — нужно проверить разрешения ниже.</p>`
+    : "";
   return `
     <div class="group-label">Разрешения</div>
+    ${dotHint}
     ${micRow}
     ${notifRow}
     ${batteryRow}
@@ -4557,7 +4590,7 @@ function permissionsSectionHtml() {
 }
 
 function syncPermissionsBadge() {
-  state.permissionsHasIssues = buildPermissionIssues().length > 0;
+  state.permissionsHasIssues = permissionsBadgeActive();
 }
 
 async function syncNotifStateForSettings() {
@@ -6253,6 +6286,7 @@ function renderSettings() {
             <div class="code-tile-top">
               <span class="code-tile-lab">Ключ переноса</span>
               <span class="code-tile-ico" id="key-help" aria-label="Что переносится по ключу">${ICONS.help}</span>
+              <span class="code-tile-ico" id="share-key" aria-label="Поделиться ключом">${ICONS.share}</span>
               <span class="code-tile-ico" id="copy-key" aria-label="Скопировать ключ">${ICONS.copy}</span>
             </div>
             <div class="code key">${keyShown}</div>
@@ -9601,17 +9635,9 @@ document.addEventListener("click", async event => {
     return;
   }
 
-  if (event.target.closest("#share-transfer-key")) {
-    const key = state.user.transferKey || "";
-    const text = `Ключ переноса SoulVoice: ${key}`;
-    try {
-      await shareNative({ title: "Ключ переноса SoulVoice", text });
-    } catch (err) {
-      if (err?.name !== "AbortError" && !/cancel/i.test(String(err?.message || ""))) {
-        toast("Не удалось поделиться");
-      }
-    }
-    return;
+  if (event.target.closest("#share-transfer-key") || event.target.closest("#share-key")) {
+    event.stopPropagation();
+    return shareTransferKey();
   }
 
   // Раньше копирования: значок вопроса лежит внутри той же плитки,

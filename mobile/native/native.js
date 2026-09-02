@@ -1059,7 +1059,10 @@ if (Capacitor.isNativePlatform()) {
       }
     },
     share: async ({ title = "", text = "", url = "", dialogTitle = "Поделиться" } = {}) => {
-      await Share.share({ title, text, url, dialogTitle });
+      const payload = { title, text, url: url || undefined, dialogTitle };
+      const can = await Share.canShare();
+      if (!can?.value) throw new Error("share unavailable");
+      await Share.share(payload);
     },
   };
 
