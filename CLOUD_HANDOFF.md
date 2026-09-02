@@ -94,7 +94,7 @@
 
 1. **Работать ТОЛЬКО** в `/Users/valerii/Downloads/voicecapture` для задач SoulVoice.
 2. После изменений Capacitor-конфига: `npx cap sync android` (или `npm run sync` из `mobile/`).
-3. Перед деплоем APK — проверить сборку локально; перед деплоем сервера — `node test/parse.test.js`.
+3. Перед деплоем APK — проверить сборку локально; перед деплоем сервера — `node test/parse.test.js`. **После деплоя на прод** — `./scripts/check-site.sh` (см. [`SITE_DEPLOY.md`](SITE_DEPLOY.md)).
 4. Коммиты — **только по явной просьбе** владельца.
 5. Поднимать `versionCode` / `versionName` / `app-version.json` / `SW_VERSION` **одновременно** при релизе APK.
 6. **RuStore:** обновления только через магазин — в приложении нет кнопок «Обновить». Перед публикацией: поднять `versionName`+`versionCode` в `build.gradle` и `app-version.json`, собрать `npm run aab:release`; RuStore берёт версию из манифеста AAB/APK.
@@ -107,9 +107,10 @@
 4. **Не печатать** секреты (`voicecapture.env`, keystore, токены).
 5. Правило **«статичные кадры»** (без Ken Burns/zoompan) относится к **psyche_circles**, **не к SoulVoice**.
 
-### Cursor rule
+### Cursor rules
 
-Файл `.cursor/rules/no-monorepo.mdc` — alwaysApply: SoulVoice живёт отдельно от psyche.
+- `.cursor/rules/no-monorepo.mdc` — SoulVoice живёт отдельно от psyche.
+- `.cursor/rules/site-deploy.mdc` — после деплоя проверять soulvoicee.ru (лендинг `/` ≠ PWA `/app/`).
 
 ---
 
@@ -226,6 +227,7 @@ ssh -i ~/.ssh/id_rei_do -o IdentitiesOnly=yes root@201.51.3.63 \
 | [`AI_HANDOFF.md`](AI_HANDOFF.md) | SSH, деплой A/B, архитектура, баги |
 | [`SOSTOYANIE_PROEKTA.md`](SOSTOYANIE_PROEKTA.md) | Этапы 1–3, продуктовые решения, долги |
 | [`DOMAIN_MIGRATION.md`](DOMAIN_MIGRATION.md) | Миграция zapisala → soulvoicee.ru |
+| [`SITE_DEPLOY.md`](SITE_DEPLOY.md) | Проверка сайта после деплоя, лендинг vs PWA |
 | [`etap-2-harakter-i-golos.md`](etap-2-harakter-i-golos.md) | Этап 2 — голос |
 | [`etap-3-vneshniy-vid.md`](etap-3-vneshniy-vid.md) | Этап 3 — UI |
 

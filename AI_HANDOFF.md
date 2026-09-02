@@ -161,6 +161,10 @@ ssh -i ~/.ssh/id_rei_do -o IdentitiesOnly=yes root@201.51.3.63 \
 
 **Важно:** на сервере дерево плоское (`/opt/voicecapture/server.js`, `/opt/voicecapture/lib/…`, `/opt/voicecapture/public/…`) — это содержимое локальной папки `voicecapture/app/`, не весь `voicecapture/`.
 
+**Лендинг** (`https://soulvoicee.ru/`) — отдельно: `site/` → `/opt/site/` на сервере. Rsync только `app/` лендинг **не обновляет**; если `/opt/site/index.html` пропал, корень отдаёт PWA («овал телефона», «Загружаю…»). Подробно: [`SITE_DEPLOY.md`](SITE_DEPLOY.md).
+
+После **любого** деплоя: `./scripts/check-site.sh`.
+
 После деплоя web/parse пользователю **не нужен новый APK**, если менялось только серверное поведение (например команды «внеси правки»).
 
 ### B) Правки Android (виджет, AlarmManager, иконки, native bridge)
@@ -235,9 +239,10 @@ Package: `ru.soulvoice.app`. Domains в манифесте: `soulvoicee.ru`.
 2. **Не делать** `git push --force`, не трогать чужие сервисы на том же IP без нужды.
 3. Коммиты — только если владелец явно попросил.
 4. Перед деплоем на прод: прогнать релевантные тесты (`parse.test.js` минимум для NLP).
-5. После `systemctl restart voicecapture` проверить `systemctl is-active voicecapture` и при необходимости `journalctl`.
-6. Для Android-багов уточнять: воспроизводится с **виджета** или из **открытого приложения** (разные пути планирования уведомлений).
-7. README в репо может врать про старый IP — сверяйся с этим handoff и с живым `voicecapture.service` на сервере.
+5. После деплоя: `./scripts/check-site.sh` + `systemctl is-active voicecapture` (см. [`SITE_DEPLOY.md`](SITE_DEPLOY.md)).
+6. После `systemctl restart voicecapture` при необходимости `journalctl`.
+7. Для Android-багов уточнять: воспроизводится с **виджета** или из **открытого приложения** (разные пути планирования уведомлений).
+8. README в репо может врать про старый IP — сверяйся с этим handoff и с живым `voicecapture.service` на сервере.
 
 ---
 

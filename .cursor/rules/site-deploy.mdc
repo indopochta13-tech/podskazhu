@@ -1,0 +1,39 @@
+---
+description: После деплоя soulvoicee.ru — обязательная проверка сайта
+alwaysApply: true
+---
+
+# Деплой soulvoicee.ru — не ломать сайт
+
+На домене **два независимых слоя**:
+
+- **`/`** — лендинг из `site/` → сервер **`/opt/site/`** (Caddy file_server)
+- **`/app/`** — PWA из `app/public/` → **`/opt/voicecapture/public/`** (Node)
+
+## После любого деплоя на прод
+
+1. Запустить **`./scripts/check-site.sh`** (или `node qa/check-site.mjs`).
+2. Убедиться, что **`https://soulvoicee.ru/`** — лендинг («Скажите вслух»), **не** PWA с «Загружаю…» и овалом телефона.
+3. Убедиться, что **`/app/`** загружается (исчезает «Загружаю…»).
+4. На сервере после rsync/scp: **`sh /opt/voicecapture/deploy/fix-public-perms.sh`**.
+
+## Деплой — что куда
+
+| Изменения | Куда rsync |
+|-----------|------------|
+| `app/` (сервер, PWA, API) | `app/` → `root@201.51.3.63:/opt/voicecapture/` |
+| `site/` (лендинг) | `site/` → `root@201.51.3.63:/opt/site/` |
+
+**rsync только `app/` не обновляет лендинг.** Пропажа `/opt/site/index.html` → корень отдаёт PWA → «сломанный сайт».
+
+## Shell-версия PWA
+
+При смене оболочки поднимать **одно число** везде: `index.html` (`__VC_SHELL_V`, `app.js?v=`), `sw.js` (`SW_VERSION`), `app.js` (`SW_VERSION`).
+
+## Документация
+
+Полный чеклист: **`SITE_DEPLOY.md`**. SSH и rsync: **`AI_HANDOFF.md`**.
+
+## Касса (Prodamus)
+
+Перед проверкой оплаты: лендинг, `/privacy.html`, `/offer.html`, `/app/` с тарифами, webhook `/api/billing/prodamus/webhook` не 502.
