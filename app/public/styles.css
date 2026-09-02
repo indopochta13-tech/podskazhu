@@ -593,9 +593,9 @@ button.shelf-pill:active { transform: scale(.9); }
 }
 .help-sheet-steps li + li { margin-top: 6px; }
 .perm-issue-row { align-items: flex-start; }
+.perm-row-copy { flex: 1; min-width: 0; }
 .perm-issue-copy { flex: 1; min-width: 0; }
 .perm-issue-btn { flex-shrink: 0; margin-top: 2px; }
-.perm-section-label { margin-top: 0; }
 
 /* Подсказка при коротком тапе по кнопке записи.
    Без фона и рамки — просто слова посреди экрана. Плашка выглядела
@@ -3510,7 +3510,6 @@ html.vc-native {
 .shelf-strip--pro {
   flex: 1 1 0;
   justify-content: space-evenly;
-  overflow: visible;
 }
 .shelf-strip--free {
   flex: 0 0 auto;
@@ -3527,8 +3526,8 @@ html.vc-native {
 }
 .shelf-pill-lock {
   position: absolute;
-  right: -1px;
-  bottom: -1px;
+  right: 1px;
+  bottom: 1px;
   width: 12px;
   height: 12px;
   display: flex;
