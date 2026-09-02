@@ -1485,10 +1485,19 @@ a.setting { text-decoration: none; color: inherit; }
 }
 .code-tile-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
   margin-bottom: 6px;
+}
+.code-tile-actions {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.code-tile-ico-share {
+  grid-column: 2;
 }
 .code-tile-lab {
   font-size: 10px;
@@ -2902,15 +2911,16 @@ html.vc-native {
   padding: 7px 12px;
 }
 
-/* На десктопе — полноценное приложение без «телефона в овале» (лендинг на /, PWA на /app/). */
+/* На десктопе — полноширинное приложение без «телефона в овале». */
 @media (min-width: 680px) {
   body {
     background: var(--bg);
   }
   .app {
     width: 100%;
-    max-width: min(480px, 100vw);
+    max-width: min(960px, 100vw);
     height: 100%;
+    min-height: 100vh;
     margin: 0 auto;
     border: none;
     border-radius: 0;
@@ -3745,6 +3755,28 @@ html.vc-native {
   padding: 12px 14px;
   margin-bottom: 10px;
 }
+
+.settings-restore-block {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.settings-restore-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.settings-restore-hint {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+.settings-restore-block .field { margin-bottom: 10px; }
+.settings-restore-block .consent { margin-bottom: 12px; }
+.settings-restore-block .auth-error { text-align: left; margin-top: 8px; }
 
 /* ── Оформление: тема и палитра ───────────────────────────── */
 .look-block {

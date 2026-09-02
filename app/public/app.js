@@ -35,7 +35,6 @@ const ICONS = {
   send: `<svg ${A}><path d="M10 14l11 -11" /><path d="M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5" /></svg>`,
   play: `<svg ${A}><path d="M7 4v16l13 -8z" /></svg>`,
   stop: `<svg ${A}><path d="M5 5m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z" /></svg>`,
-  share: `<svg ${A}><path d="M13 4v4c-6.575 1.028 -9.02 6.788 -10 12c-.037 .206 0 .333 .222 .556s.341 .278 .547 .361c.206 .074 .348 .074 .555 .074c.396 0 .72 -.177 .945 -.483c1.028 -1.44 2.155 -3.17 4.221 -4.378c.328 -.216 .583 -.344 .875 -.483v4a.997 .997 0 0 0 1.414 1.414l6 -6a.997 .997 0 0 0 0 -1.414l-6 -6a.997 .997 0 0 0 -1.414 0l-.083 .094a1 1 0 0 0 .083 1.32z" /></svg>`,
 };
 
 const MONTHS_FULL = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
@@ -1186,9 +1185,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.63";
+const APP_VERSION = "1.9.64";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 143;
+const SW_VERSION = 144;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -6285,9 +6284,11 @@ function renderSettings() {
           <button type="button" class="code-tile" id="key-tile" aria-label="Ключ переноса">
             <div class="code-tile-top">
               <span class="code-tile-lab">Ключ переноса</span>
-              <span class="code-tile-ico" id="key-help" aria-label="Что переносится по ключу">${ICONS.help}</span>
-              <span class="code-tile-ico" id="share-key" aria-label="Поделиться ключом">${ICONS.share}</span>
-              <span class="code-tile-ico" id="copy-key" aria-label="Скопировать ключ">${ICONS.copy}</span>
+              <div class="code-tile-actions">
+                <span class="code-tile-ico" id="key-help" aria-label="Что переносится по ключу">${ICONS.help}</span>
+                <span class="code-tile-ico" id="copy-key" aria-label="Скопировать ключ">${ICONS.copy}</span>
+                <span class="code-tile-ico code-tile-ico-share" id="share-key" aria-label="Поделиться ключом">${ICONS.share}</span>
+              </div>
             </div>
             <div class="code key">${keyShown}</div>
           </button>
@@ -6401,6 +6402,23 @@ function renderSettings() {
           </div>
           <span class="row-chevron">${ICONS.chevron}</span>
         </a>
+
+        <div class="settings-restore-block">
+          <div class="settings-restore-title">Восстановить по ключу переноса</div>
+          <p class="settings-restore-hint">Пропустили «У меня есть ключ переноса» при входе? Вставьте ключ — записи вернутся на этот телефон.</p>
+          <label class="field">
+            <span>Ключ переноса</span>
+            <input id="settings-restore-key" name="restore-key" type="text" autocapitalize="characters" autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" />
+          </label>
+          <label class="consent" for="settings-restore-consent">
+            <input type="checkbox" id="settings-restore-consent" />
+            <span>Согласен на обработку записей и принимаю
+              <a href="/privacy.html" data-doc="/privacy.html" target="_blank" rel="noopener">политику конфиденциальности</a>.</span>
+          </label>
+          <button class="btn block" id="settings-restore" type="button">Забрать свои записи</button>
+          <p class="auth-error" data-settings-restore-error></p>
+        </div>
+
         <button class="setting danger-row" id="wipe-account">
           <div>
             <div class="name">Удалить аккаунт и все записи</div>
@@ -6502,6 +6520,37 @@ function renderSettings() {
     if (changed && state.screen === "settings") {
       state.settingsScroll = viewEl.querySelector(".scroll")?.scrollTop || 0;
       renderSettings();
+    }
+  });
+
+  document.getElementById("settings-restore")?.addEventListener("click", async (event) => {
+    const consentEl = document.getElementById("settings-restore-consent");
+    const keyInput = document.getElementById("settings-restore-key");
+    const errorEl = viewEl.querySelector("[data-settings-restore-error]");
+    const key = keyInput?.value.trim();
+    if (!consentEl?.checked) {
+      errorEl.textContent = "Отметьте согласие — без него нельзя продолжить";
+      consentEl?.focus();
+      return;
+    }
+    if (!key) {
+      errorEl.textContent = "Вставьте ключ переноса";
+      return;
+    }
+    event.currentTarget.disabled = true;
+    errorEl.textContent = "";
+    try {
+      await restoreByTransferKey(key);
+      store.onboarded = true;
+      state.screen = "shelves";
+      state.shelf = defaultShelf();
+      render();
+      setupPush(false);
+      toast("Записи восстановлены");
+    } catch (err) {
+      errorEl.textContent = err.message;
+    } finally {
+      event.currentTarget.disabled = false;
     }
   });
 }
