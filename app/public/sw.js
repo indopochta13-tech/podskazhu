@@ -1,11 +1,11 @@
-const SW_VERSION = 136;
+const SW_VERSION = 137;
 const CACHE = `vc-shell-v${SW_VERSION}`;
-const SHELL = ["/", "/styles.css?v=103", `/app.js?v=${SW_VERSION}`, "/sounds-catalog.js", "/ui-sounds.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const SHELL = ["/", "/styles.css?v=104", `/app.js?v=${SW_VERSION}`, "/sounds-catalog.js", "/ui-sounds.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
-// Эти файлы всегда с сети: иначе старый app.js навсегда показывает экран «Скажите, что напомнить».
+// Эти файлы всегда с сети: иначе старый app.js/styles.css навсегда показывает устаревший интерфейс.
 function networkOnly(url) {
   const p = url.pathname;
-  return p === "/app.js" || p === "/sw.js" || p === "/" || p === "/index.html" || p === "/app-version.json";
+  return p === "/app.js" || p === "/styles.css" || p === "/sw.js" || p === "/" || p === "/index.html" || p === "/app-version.json";
 }
 
 self.addEventListener("install", event => {
