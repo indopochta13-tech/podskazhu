@@ -183,6 +183,15 @@ function grantedUntil(seen, product) {
   return Number(seen.until || 0) || Number(seen.at || 0) + product.days * DAY;
 }
 
+function userHadProPurchase(user) {
+  const uid = user.id;
+  if (Object.values(db.purchases || {}).some(p => p.userId === uid)) return true;
+  if (Object.values(ensureFamilySubs()).some(s =>
+    s.payerId === uid || (s.beneficiaryIds || []).includes(uid))) return true;
+  // Первую активацию уже проходили — демо на PRO-полках чистили.
+  return Boolean(user.settings?.proShelfClearedAt);
+}
+
 function grantProUntil(user, until, purchaseId, productId, extra = {}) {
   const billing = ensureBilling(user);
   const wasActive = billing.plan === "pro" && Number(billing.until || 0) > Date.now();
@@ -194,7 +203,9 @@ function grantProUntil(user, until, purchaseId, productId, extra = {}) {
   if (extra.familySubId) billing.familySubId = extra.familySubId;
   if (extra.familyOwnerId) billing.familyOwnerId = extra.familyOwnerId;
   if (extra.autoRenew != null) billing.autoRenew = extra.autoRenew;
-  if (!wasActive) clearProShelfData(user, db.items);
+  // Чистим демо только при самой первой оплате. Повторная подписка и restore-purchases
+  // не должны отменять записи, которые человек вёл месяцами.
+  if (!wasActive && !userHadProPurchase(user)) clearProShelfData(user, db.items);
 }
 
 function grantProduct(user, product, purchaseId, { seen = null } = {}) {

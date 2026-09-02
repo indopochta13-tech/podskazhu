@@ -10090,7 +10090,6 @@ async function boot() {
     // Просроченный токен после обновления — пробуем Preferences или /start.
     // Если токен мёртвый (удалили аккаунт) — не заводим пустой аккаунт, даём ключ переноса.
     if (store.token && err.message === "Нужен вход") {
-      const badToken = store.token;
       store.token = "";
       state.user = null;
       state.items = [];
@@ -10098,30 +10097,22 @@ async function boot() {
       state.contacts = [];
       try { await NATIVE?.clearSession?.(); } catch { /* ignore */ }
       try { await NATIVE?.ensureToken?.(); } catch { /* ignore */ }
-      if (store.token && store.token === badToken) {
-        store.token = "";
-        try { await NATIVE?.clearSession?.(); } catch { /* ignore */ }
-        state.authFlow = null;
-        render();
-        requestStartupPermissions();
-        return;
-      }
-      try {
-        if (!store.token) await silentStart();
-        await loadAppState(params, { billingReturn });
-        return;
-      } catch (retryErr) {
-        if (retryErr.message === "Нужен вход") {
-          store.token = "";
-          state.user = null;
-          try { await NATIVE?.clearSession?.(); } catch { /* ignore */ }
-          state.authFlow = null;
-          render();
-          requestStartupPermissions();
+      if (store.token) {
+        try {
+          await loadAppState(params, { billingReturn });
           return;
+        } catch (retryErr) {
+          if (retryErr.message !== "Нужен вход") return renderBootError(retryErr);
+          store.token = "";
+          try { await NATIVE?.clearSession?.(); } catch { /* ignore */ }
         }
-        return renderBootError(retryErr);
       }
+      // Был вход, но токен протух или аккаунт удалён — не заводим пустой аккаунт,
+      // иначе человек теряет доступ к записям и PRO на сервере.
+      state.authFlow = "restore";
+      render();
+      requestStartupPermissions();
+      return;
     }
     // Сеть/временный сбой — не выкидывать на экран с микрофоном и не терять сессию.
     if (store.token) {

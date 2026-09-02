@@ -13,7 +13,9 @@
     "test:parser": "node test/parse.test.js",
     "test:corpus": "node test/corpus.test.js",
     "test:support": "node test/support.test.js",
-    "test:restore": "node test/restore.test.js"
+    "test:restore": "node test/restore.test.js",
+    "test:billing": "node test/billing-lifecycle.test.js",
+    "test:pro": "node test/pro-unlock.test.js"
   },
   "dependencies": {
     "firebase-admin": "^13.6.0",
