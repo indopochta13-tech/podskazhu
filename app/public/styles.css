@@ -822,6 +822,10 @@ button.shelf-pill:active { transform: scale(.9); }
   font-size: 14px;
   font-weight: 650;
 }
+.swipe:not(.open):not(.dragging) .swipe-del {
+  visibility: hidden;
+  pointer-events: none;
+}
 .swipe-front {
   position: relative;
   transition: transform 0.18s ease;

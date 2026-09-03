@@ -2184,6 +2184,98 @@ route("POST", /^\/api\/health\/seed$/, async (ctx) => {
   return { status: 200, body: { created: created.length, ...stateFor(ctx.user) } };
 });
 
+const METERS_PRESET = [
+  { title: "Свет" },
+  { title: "Вода" },
+  { title: "Газ" },
+];
+const METERS_PRESET_KEYS = new Set(METERS_PRESET.map(r => r.title.toLowerCase()));
+
+function metersPresetKey(title) {
+  const k = String(title || "").trim().toLowerCase();
+  return METERS_PRESET_KEYS.has(k) ? k : null;
+}
+
+route("POST", /^\/api\/meters\/seed$/, async (ctx) => {
+  if (!isPro(ctx.user)) {
+    return { status: 403, body: { error: "Доступно по подписке ПРО", proRequired: true } };
+  }
+  const settings = ctx.user.settings || {};
+  const tz = safeZone(settings.tz);
+  const nowParts = zonedParts(Date.now(), tz);
+  const baseDate = { year: nowParts.year, month: nowParts.month, day: 15 };
+  const monthWindow = { fromDay: 15, toDay: 26 };
+  const prefs = shelfPrefsFor("meters", settings);
+  const found = new Map();
+
+  for (const item of activeItems(ctx.user.id)) {
+    if (item.cancelled || item.archived || item.done) continue;
+    const key = metersPresetKey(item.title);
+    if (!key || found.has(key)) continue;
+    found.set(key, item);
+  }
+
+  let cancelled = 0;
+  for (const item of activeItems(ctx.user.id)) {
+    if (item.cancelled || item.archived || item.done) continue;
+    const key = metersPresetKey(item.title);
+    if (item.shelf === "meters") {
+      if (!key) {
+        item.cancelled = true;
+        item.updatedAt = Date.now();
+        cancelled += 1;
+        continue;
+      }
+      const keeper = found.get(key);
+      if (keeper && keeper.id !== item.id) {
+        item.cancelled = true;
+        item.updatedAt = Date.now();
+        cancelled += 1;
+      }
+    }
+  }
+
+  for (const item of found.values()) {
+    if (item.shelf === "meters" && item.cancelled) continue;
+    item.shelf = "meters";
+    item.type = "bills";
+    item.repeat = normalizeRepeat({ kind: "monthly" });
+    item.monthWindow = monthWindow;
+    item.push = true;
+    item.remind = prefs.remind ?? 1440;
+    if (!item.date) item.date = baseDate;
+    if (!item.time) item.time = { hour: 10, minute: 0 };
+    item.updatedAt = Date.now();
+  }
+
+  const created = [];
+  for (const row of METERS_PRESET) {
+    const key = row.title.toLowerCase();
+    if (found.has(key) && !found.get(key).cancelled) continue;
+    created.push(makeItem(ctx.user.id, {
+      type: "bills",
+      shelf: "meters",
+      title: row.title,
+      date: baseDate,
+      time: { hour: 10, minute: 0 },
+      remind: prefs.remind ?? 1440,
+      remindExplicit: true,
+      push: true,
+      repeat: { kind: "monthly" },
+      monthWindow,
+      needsTime: false,
+      source: "meters-preset-v1",
+    }, settings));
+    found.set(key, created[created.length - 1]);
+  }
+
+  settings.metersPresetV1 = true;
+  settings.metersPresetV2 = true;
+  ctx.user.settings = settings;
+  save();
+  return { status: 200, body: { created: created.length, cancelled, ...stateFor(ctx.user) } };
+});
+
 route("POST", /^\/api\/health\/time$/, async (ctx) => {
   if (!isPro(ctx.user)) {
     return { status: 403, body: { error: "Доступно по подписке ПРО", proRequired: true } };

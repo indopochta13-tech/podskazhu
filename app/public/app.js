@@ -281,6 +281,7 @@ async function onProActivated() {
     state.proShelfDemoModal = null;
     const data = await api("/start", { method: "POST", body: { tz: state.user?.settings?.tz } });
     absorb(data);
+    scheduleMetersPreset();
     if (state.screen === "daily" || state.screen === "lists") render();
     else if (state.screen === "settings") renderSettings();
   } catch { /* ignore */ }
@@ -913,48 +914,29 @@ const METERS_PRESET = [
   { title: "Вода" },
   { title: "Газ" },
 ];
+const METERS_PRESET_KEYS = new Set(METERS_PRESET.map(r => r.title.toLowerCase()));
 
 let metersSeedBusy = false;
 async function ensureMetersPreset() {
-  if (!state.user || metersSeedBusy) return false;
-  const existing = shelfItems("meters");
-  const titles = new Set(existing.map(i => String(i.title || "").trim().toLowerCase()));
-  const missing = METERS_PRESET.filter(row => !titles.has(row.title.toLowerCase()));
-  if (!missing.length) {
-    if (!state.user.settings?.metersPresetV1) {
-      absorb(await api("/settings", { method: "POST", body: { metersPresetV1: true } }));
-    }
-    return false;
-  }
+  if (!state.user || metersSeedBusy || proShelfGated("meters")) return false;
   metersSeedBusy = true;
   try {
-    const now = todayParts();
-    const baseDate = { year: now.year, month: now.month, day: 15 };
-    for (const row of missing) {
-      await api("/items", {
-        method: "POST",
-        body: {
-          type: "bills",
-          shelf: "meters",
-          title: row.title,
-          date: baseDate,
-          time: { hour: 10, minute: 0 },
-          remind: shelfPref("meters").remind,
-          push: true,
-          repeat: { kind: "monthly" },
-          monthWindow: { fromDay: 15, toDay: 26 },
-        },
-      });
-    }
-    absorb(await api("/settings", { method: "POST", body: { metersPresetV1: true } }));
-    absorb(await api(`/state?tz=${encodeURIComponent(tz())}`));
-    return true;
+    const data = await api("/meters/seed", { method: "POST", body: {} });
+    absorb(data);
+    return (data.created || 0) > 0 || (data.cancelled || 0) > 0;
   } catch (err) {
     toast(err.message || "Не удалось настроить счётчики");
     return false;
   } finally {
     metersSeedBusy = false;
   }
+}
+
+function scheduleMetersPreset() {
+  if (!state.user || metersSeedBusy || proShelfGated("meters")) return;
+  ensureMetersPreset().then(changed => {
+    if (changed && state.screen === "daily" && state.shelf === "meters") renderDaily();
+  });
 }
 
 function fullAgeFromBirthYear(year, birthday) {
@@ -1285,9 +1267,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.75";
+const APP_VERSION = "1.9.76";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 153;
+const SW_VERSION = 154;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -5275,11 +5257,7 @@ function renderDaily() {
     </section>
   `;
   mountShelfMicFab();
-  if (state.shelf === "meters" && !metersSeedBusy) {
-    ensureMetersPreset().then(changed => {
-      if (changed && state.screen === "daily" && state.shelf === "meters") renderDaily();
-    });
-  }
+  if (state.shelf === "meters") scheduleMetersPreset();
 }
 
 function renderCalendarMain() {
@@ -5894,7 +5872,7 @@ function itemCard(item, opts = {}) {
   // Запись смахивается влево — под ней открывается «Удалить», как в списках телефона.
   return `
     <div class="swipe ${state.highlightId === item.id ? "flash" : ""}" data-item="${item.id}">
-      <button class="swipe-del" data-del="${item.id}">Удалить</button>
+      <button class="swipe-del" data-del="${item.id}" tabindex="-1" aria-hidden="true">Удалить</button>
       <div class="swipe-front">
         <div class="card-row ${archived ? "archived" : ""} ${overdue ? "overdue" : ""} ${fulfilled ? "fulfilled" : ""}">
           <div class="card-body">
@@ -6130,6 +6108,11 @@ function renderDetail() {
           </div>
         </div>`}
 
+        ${(isBday || isMeter) && !show?.extraPush ? `
+        <div class="detail-add-row">
+          <button type="button" class="chip ghost" data-detail-add="extraPush">+ пуш</button>
+        </div>` : ""}
+
         ${show?.extraPush ? `
         <div class="pick-block ${state.picker === "extra-remind" ? "open" : ""}">
           <button class="pick-head" type="button" data-pick="extra-remind">
@@ -6182,7 +6165,7 @@ function renderDetail() {
           <span>Заметка</span>
           <textarea id="f-note" rows="4" maxlength="2000" placeholder="Подробности">${esc(item.note || "")}</textarea>
         </label>`, "note") : ""}
-        ${(!isMeter && (!show?.phone || !show?.note || !show?.extraPush || (!isBday && (!show?.who || !show?.place)))) ? `
+        ${(!isMeter && !isBday && (!show?.phone || !show?.note || !show?.extraPush || (!show?.who || !show?.place))) ? `
         <div class="detail-add-row">
           ${!isBday && !show?.who ? `<button type="button" class="chip ghost" data-detail-add="who">+ участник</button>` : ""}
           ${!isBday && !show?.place ? `<button type="button" class="chip ghost" data-detail-add="place">+ место</button>` : ""}
@@ -7173,6 +7156,7 @@ function listTabMenuHtml() {
 }
 
 let listTabPressTimer = null;
+const listReadPending = new Set();
 
 function bindListTabLongPress() {
   viewEl.querySelectorAll("[data-list-tab]").forEach(tab => {
@@ -7368,10 +7352,38 @@ async function saveSharedListDefault(pairId) {
 
 async function markSharedListRead(pairId) {
   if (!pairId || String(pairId).startsWith("out-")) return;
+  const open = state.lists.find(l => l.id === pairId);
+  if (!open?.unread) return;
+  if (listReadPending.has(pairId)) return;
+  listReadPending.add(pairId);
+  const keepListId = state.listId;
   try {
     const data = await api(`/lists/${pairId}/read`, { method: "POST", body: {} });
-    absorbSharedLists(data);
+    if (data.pair) absorbList(data.pair);
+    if (Array.isArray(data.pairs)) {
+      for (const p of data.pairs) {
+        const row = state.lists.find(l => l.id === p.id);
+        if (row) row.unread = p.unread || 0;
+      }
+    }
+    if (Number.isFinite(data.unreadTotal)) state.listsUnread = data.unreadTotal;
+    if (state.screen === "lists" && state.listId === keepListId) {
+      viewEl.querySelectorAll("[data-list-tab]").forEach(tab => {
+        const id = tab.dataset.listTab;
+        const row = state.lists.find(l => l.id === id);
+        const mark = tab.querySelector(".tab-count");
+        if (row?.unread) {
+          if (mark) mark.textContent = String(row.unread);
+          else tab.insertAdjacentHTML("beforeend", `<span class="tab-count">${row.unread}</span>`);
+        } else {
+          mark?.remove();
+        }
+      });
+    }
   } catch { /* офлайн — badge сбросится при следующем заходе */ }
+  finally {
+    listReadPending.delete(pairId);
+  }
 }
 
 /** Поле ручного ввода: текст, textarea, number — не чекбоксы и кнопки. */
@@ -7445,7 +7457,7 @@ function renderLists() {
   const open = state.lists.find(l => l.id === state.listId);
 
   if (open) {
-    markSharedListRead(open.id);
+    queueMicrotask(() => markSharedListRead(open.id));
     viewEl.innerHTML = `
       <section class="screen">
         ${bar("Общие списки", { back: "shelves" })}
@@ -8950,13 +8962,11 @@ document.addEventListener("click", async event => {
     state.listTabMenu = null;
     state.listId = id;
     state.listTabScrollId = null;
-    state.listTabScrollId = null;
     state.listInviteDraft = null;
     saveSharedListDefault(id);
-    return refreshState().then(() => {
-      renderLists();
-      syncListPoll();
-    });
+    renderLists();
+    syncListPoll();
+    return;
   }
 
   if (event.target.closest("#list-invite-tab")) {
@@ -10427,6 +10437,7 @@ async function loadAppState(params, { billingReturn = false } = {}) {
     state.listInviteDraft = { code: state.listJoinDraft, step: "nickname" };
     state.listJoinDraft = "";
   }
+  scheduleMetersPreset();
 }
 
 /**
