@@ -87,6 +87,8 @@ let pendingWidgetAction = null;
 let liveNoticeHandler = null;
 let supportOpenHandler = null;
 let pendingSupportOpen = false;
+let sportOpenHandler = null;
+let pendingSportOpen = false;
 let scheduling = null;
 
 function token() {
@@ -303,10 +305,11 @@ async function syncReminders(items, settings) {
 
       for (const item of items || []) {
         if (item.cancelled || item.done || item.status !== "active" || item.enabled === false) continue;
+        const shelf = item.shelf || item.type;
+        if (shelf === "sport" || item.type === "sport") continue;
         const at = eventDate(item);
         if (!at) continue;
 
-        const shelf = item.shelf || item.type;
         const isHealth = shelf === "health" || item.type === "health";
         if (isHealth && offDays.has(at.getDay())) continue;
 
@@ -349,6 +352,38 @@ async function syncReminders(items, settings) {
             ...(alarmSound ? { sound: `${alarmSound}.mp3` } : {}),
             extra: { itemId: item.id },
           });
+        }
+      }
+
+      // Спорт: один пуш на день недели — «сегодня тренировка в HH:MM».
+      const sportNotify = Array.isArray(settings?.sportNotify) ? settings.sportNotify : null;
+      const sportDays = settings?.sportPlan?.days;
+      if (sportNotify && sportDays) {
+        for (let wd = 0; wd < 7; wd += 1) {
+          const slot = sportNotify[wd];
+          const day = sportDays[wd] ?? sportDays[String(wd)];
+          if (!slot?.enabled) continue;
+          const hour = Number.isFinite(slot.hour) ? slot.hour : 19;
+          const minute = Number.isFinite(slot.minute) ? slot.minute : 0;
+          const target = new Date();
+          target.setHours(hour, minute, 0, 0);
+          let ahead = (wd - target.getDay() + 7) % 7;
+          if (ahead === 0 && target.getTime() <= now + 1000) ahead = 7;
+          target.setDate(target.getDate() + ahead);
+          if (target.getTime() > now + 1000) {
+            const timeLabel = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+            list.push({
+              id: 1800000000 + wd,
+              title: "Тренировка",
+              body: `сегодня тренировка в ${timeLabel}`,
+              schedule: { at: target.toISOString(), allowWhileIdle: true },
+              _atMs: target.getTime(),
+              actionTypeId: ACTION_TYPE,
+              channelId: remindChannel(),
+              ...(notifySound ? { sound: `${notifySound}.mp3` } : {}),
+              extra: { go: "sport" },
+            });
+          }
         }
       }
 
@@ -756,6 +791,11 @@ async function handleNotificationAction(event) {
     else pendingSupportOpen = true;
     return;
   }
+  if (extra.go === "sport") {
+    if (sportOpenHandler) sportOpenHandler();
+    else pendingSportOpen = true;
+    return;
+  }
 
   const itemId = extra.itemId;
   if (!itemId) return;
@@ -884,7 +924,7 @@ async function init() {
       title: notification?.title || "Напоминание",
       body: notification?.body || "",
       itemId: extra.itemId || null,
-      url: extra.url || "",
+      url: extra.go ? `/?go=${extra.go}` : (extra.url || ""),
     });
   });
 
@@ -957,6 +997,12 @@ if (Capacitor.isNativePlatform()) {
       supportOpenHandler = cb;
       if (!pendingSupportOpen) return;
       pendingSupportOpen = false;
+      cb();
+    },
+    onSportOpen: cb => {
+      sportOpenHandler = cb;
+      if (!pendingSportOpen) return;
+      pendingSportOpen = false;
       cb();
     },
     onJoinCode: cb => {

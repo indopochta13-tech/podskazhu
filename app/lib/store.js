@@ -387,6 +387,11 @@ export function defaultSettings(tz) {
     healthRoutineV3: false,
     // Выключенные дни в «Витамины»: свёрнуты в списке, без пушей в этот день.
     healthDaysOff: [],
+    // План тренировок на неделю (дни, упражнения, группы мышц).
+    sportPlan: null,
+    sportNotify: null,
+    sportPlanV1: false,
+    sportRemindedKey: "",
   };
 }
 

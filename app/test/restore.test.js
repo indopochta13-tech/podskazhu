@@ -13,6 +13,7 @@ import url from "node:url";
 import { spawn } from "node:child_process";
 
 const APP_DIR = path.join(path.dirname(url.fileURLToPath(import.meta.url)), "..");
+const appJs = fs.readFileSync(path.join(APP_DIR, "public/app.js"), "utf8");
 let failed = 0;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -60,6 +61,19 @@ function check(label, condition, detail = "") {
 
 async function main() {
   console.log("Проверяю перенос по ключу\n");
+
+  check(
+    "restore не сносит сессию до ответа",
+    /async function restoreByTransferKey\(key\) \{[\s\S]*?const data = await api\("\/restore"/.test(appJs)
+      && !/async function restoreByTransferKey\(key\) \{[\s\S]{0,220}state\.user = null/.test(appJs),
+    "state.user обнулялся до запроса",
+  );
+  check(
+    "форма переноса снимает disabled при input",
+    /function mountTransferRestoreForm/.test(appJs)
+      && /input\?\.addEventListener\("input"[\s\S]*?btn\.disabled = false/.test(appJs)
+      && /finally \{[\s\S]*?btn\.disabled = false/.test(appJs),
+  );
 
   await withServer({}, async api => {
     const a = await api("/start", { method: "POST", body: { tz: "Europe/Moscow" }, auth: false });

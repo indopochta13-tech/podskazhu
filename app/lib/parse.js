@@ -192,7 +192,10 @@ const MEETING_RE = new RegExp(
 const ALARM_RE = new RegExp(
   `${NBL}(?:(?:включи|заведи|поставь|поставить)\\s+)?будильник`
   + `|${NBL}сигнал\\s+на`
-  + `|${NBL}(?:разбуд(?:и|ить|ите)|подъем|разбуди\\s+меня)`,
+  + `|${NBL}(?:разбуд(?:и|ить|ите)|подъем|разбуди\\s+меня)`
+  // «подними меня в 6» — то же самое другими словами. Без «меня/нас» не берём:
+  // «подними отчёт» будить никого не просит.
+  + `|${NBL}подним(?:и|ите)\\s+(?:меня|нас)${NB}`,
   "iu",
 );
 // «поздравить с днём рождения» — тот же праздник, просто другой падеж.
@@ -542,11 +545,21 @@ function wordNumber(token) {
   return Object.prototype.hasOwnProperty.call(NUM_WORDS, key) ? NUM_WORDS[key] : null;
 }
 
+// Совпадение годится, только если разобранного текста не касается ни одним
+// символом. Раньше проверялся один первый символ — и правило часа цеплялось
+// за «на 1» в уже закрытом «на 1 сентября»: дата вставала верно, а час
+// становился первым. Дата и час спорить не должны: что разобрано, то занято.
+function maskFree(mask, start, end) {
+  for (let i = start; i < end && i < mask.length; i += 1) if (mask[i]) return false;
+  return true;
+}
+
 function firstMatch(low, mask, pattern) {
   const re = new RegExp(pattern, "giu");
   let m;
   while ((m = re.exec(low)) !== null) {
-    if (!mask[m.index]) return m;
+    if (maskFree(mask, m.index, m.index + m[0].length)) return m;
+    if (re.lastIndex === m.index) re.lastIndex += 1;
   }
   return null;
 }
@@ -557,7 +570,7 @@ function eachMatch(low, mask, pattern) {
   const out = [];
   let m;
   while ((m = re.exec(low)) !== null) {
-    if (!mask[m.index]) out.push(m);
+    if (maskFree(mask, m.index, m.index + m[0].length)) out.push(m);
     if (re.lastIndex === m.index) re.lastIndex += 1;
   }
   return out;
@@ -738,8 +751,15 @@ const REPEAT_EVERY_RE = new RegExp(
 const REPEAT_RULES = [
   { pattern: `${NBL}(?:по\\s+будням|каждый\\s+будний\\s+день|по\\s+рабочим\\s+дням)${NB}`, kind: "weekdays" },
   { pattern: `${NBL}(?:по\\s+выходным|каждые\\s+выходные)${NB}`, kind: "weekends" },
+  // «будильник на выходные в 11» — просьба будить каждые выходные.
+  // Только для будильника: «на выходных помыть машину» — это ближайшая
+  // суббота и никакого повтора, а «продукты на выходные» — вовсе запас.
+  { pattern: `${NBL}(?:на|в)\\s+выходны[ех]${NB}`, kind: "weekends", wakeUpOnly: true },
   { pattern: `${NBL}(?:кажд(?:ый|ое|ую)\\s+(?:день|утро|вечер|ночь)|ежедневно|каждый\\s+раз\\s+в\\s+день)${NB}`, kind: "daily" },
-  { pattern: `${NBL}(?:кажд(?:ый|ую)\\s+(?:недел[юяи]|понедельник|вторник|сред[уаы]|четверг|пятниц[уаы]|суббот[уаы]|воскресень[еяю])|еженедельно|по\\s+(?:${WEEKDAY_PLURAL}))(?:\\s+и\\s+(?:по\\s+)?(?:${WEEKDAY_PLURAL}))*${NB}`, kind: "weekly" },
+  // «по понедельникам средам», «по вторникам, четвергам» — дни перечисляют
+  // и без союза. Раньше склеивалось только через «и», и второй день терялся:
+  // будильник вставал на один понедельник.
+  { pattern: `${NBL}(?:кажд(?:ый|ую)\\s+(?:недел[юяи]|понедельник|вторник|сред[уаы]|четверг|пятниц[уаы]|суббот[уаы]|воскресень[еяю])|еженедельно|по\\s+(?:${WEEKDAY_PLURAL}))(?:(?:\\s*,\\s*|\\s+)(?:и\\s+)?(?:по\\s+)?(?:${WEEKDAY_PLURAL}))*${NB}`, kind: "weekly" },
   { pattern: `${NBL}(?:кажд(?:ый|ое)\\s+(?:месяц|число)|ежемесячно|раз\\s+в\\s+месяц)${NB}`, kind: "monthly" },
 ];
 
@@ -755,6 +775,18 @@ const REPEAT_WEEKDAY_HINT = [
   { pattern: "суббот[уаы]|субботам", idx: 6 },
   { pattern: "воскресень[еяю]|воскресеньям", idx: 0 },
 ];
+
+// «понедельник, среда, пятница», «в понедельник среду и пятницу» — перечисление
+// дней недели читается как недельный повтор, даже без формы «по …ам».
+// Диапазон «с понедельника до пятницы» сюда не попадает: между днями стоит
+// предлог, а перечисление склеивается только запятой, союзом «и» или пробелом.
+const WEEKDAY_ANY = WEEKDAYS.map(w => `(?:${w.pattern})${NB}`).join("|");
+const WEEKDAY_JOIN = `(?:\\s*,\\s*(?:и\\s+)?|\\s+и\\s+|\\s+)(?:(?:в|во|по)\\s+)?`;
+const WEEKDAY_LIST_RE = new RegExp(
+  `${NBL}(?:(?:в|во|по|кажд(?:ый|ую|ое))\\s+)?(?:${WEEKDAY_ANY})`
+  + `(?:${WEEKDAY_JOIN}(?:${WEEKDAY_ANY}))+`,
+  "iu",
+);
 
 const REPEAT_DAY_PART = [
   { pattern: "утр(?:о|ом|а)", hour: 9 },
@@ -801,6 +833,7 @@ export function extractWhen(text, ctx, opts = {}) {
 
   if (!repeat) {
     for (const rule of REPEAT_RULES) {
+      if (rule.wakeUpOnly && !wakeUp) continue;
       const m = firstMatch(low, mask, rule.pattern);
       if (!m) continue;
       repeat = { kind: rule.kind };
@@ -816,6 +849,24 @@ export function extractWhen(text, ctx, opts = {}) {
       }
       markRange(mask, m.index, m.index + m[0].length);
       break;
+    }
+  }
+
+  // Перечисление дней без «по …ам»: «будильники на понедельник, среда, пятница».
+  // Раньше из такого списка выживал только первый день и запись становилась
+  // однократной — человек ставил три будильника, а звонил один.
+  if (!repeat) {
+    const list = firstMatch(low, mask, WEEKDAY_LIST_RE.source);
+    if (list) {
+      const days = [];
+      for (const hit of list[0].matchAll(new RegExp(`(?:${WEEKDAY_ANY})`, "giu"))) {
+        const wd = WEEKDAYS.find(w => new RegExp(`^(?:${w.pattern})$`, "iu").test(hit[0]));
+        if (wd && !days.includes(wd.idx)) days.push(wd.idx);
+      }
+      if (days.length > 1) {
+        repeat = { kind: "weekly", days: days.sort((a, b) => a - b) };
+        markRange(mask, list.index, list.index + list[0].length);
+      }
     }
   }
 
@@ -1397,6 +1448,22 @@ export function extractWhen(text, ctx, opts = {}) {
     }
   }
 
+  // «будильник завтра 17 часов», «созвон 9 часов» — предлога нет, но слово «часов»
+  // само называет время на циферблате. Длительности («таймер на 3 часа», «через
+  // 2 часа», «за 2 часа до») разобраны выше и уже закрыты маской, так что сюда
+  // доходит только час суток. Раньше такая форма терялась целиком: будильник
+  // уезжал без времени и добирал его из умолчаний карточки.
+  if (!time) {
+    const m = firstMatch(low, mask, `${NBL}(\\d{1,2})\\s*час(?:ов|а)${NB}\\s*(утра|дня|вечера|ночи)?${NB}`);
+    if (m) {
+      const hour = Number(m[1]);
+      if (hour <= 23) {
+        time = { hour: resolveHour(hour, 0, m[2] || partHint, nowParts, dayKnown(), wakeUp), minute: 0 };
+        markRange(mask, m.index, m.index + m[0].length);
+      }
+    }
+  }
+
   // «в пять», «в шесть тридцать», «в двенадцать ноль ноль»
   if (!time) {
     const pattern = `${NBL}${TIME_LEAD}(?:в|к|на)\\s+(${W}+)(?:\\s+(${MINUTE_WORD_PATTERN})${NB})?\\s*(?:час${W}*)?\\s*(утра|дня|вечера|ночи)?${NB}`;
@@ -1639,6 +1706,18 @@ function remindExplicit(when) {
   return when.timer || when.remindOverride != null || when.atMoment;
 }
 
+// Подводка будильника. «Разбуди меня», «поставь будильник», «подними нас» —
+// это просьба, а не имя записи: в названии от неё остаётся только то, что
+// человек добавил сам («будильник на зарядку» → «Зарядку»).
+const ALARM_CMD_TITLE_RE = new RegExp(
+  `^(?:(?:включи|заведи|поставь|поставить|установи|установить|создай|создать)`
+  // «поставь два будильника», «заведи три будильника» — счёт тоже команда.
+  + `\\s+(?:(?:\\d{1,2}|два|две|три|четыре|пять)\\s+)?)?`
+  + `(?:будильник${W}*|разбуд(?:и|ите|ить)|подним(?:и|ите)|поднять|подъем|сигнал)`
+  + `(?:\\s+(?:меня|нас))?${NB}(?:\\s+(?:пораньше|попозже))?${NB}(?:\\s+(?:на|про|для)${NB})?[\\s,:;.—–-]*`,
+  "iu",
+);
+
 function isWeakTitle(title) {
   if (!title || junkOnly(title)) return true;
   return LEAD_VERB_ONLY.test(normalize(title));
@@ -1692,6 +1771,205 @@ function cleanTitle(raw) {
     t = next;
   }
   return t && !junkOnly(t) ? capitalize(t) : "";
+}
+
+// ─── День рождения: имя и год ───
+//
+// «день рождения Марии 8 июня 1985 года рождения» — в названии карточки нужна
+// «Мария». Сам оборот и команда «запиши» — это просьба, а не имя; год рождения —
+// отдельное поле, по нему карточка считает полные годы.
+const BDAY_MARKER_RE = new RegExp(
+  `${NBL}(?:д(?:ень|ня|нем|не)\\s+рождени[яею]|днюх[аиуе]|др)${NB}`,
+  "iu",
+);
+// «1985 года рождения», «5 мая 1980 года», «3 июня 2015» — четырёхзначный год
+// рядом с датой рождения. Хвост «года рождения» забираем вместе с числом,
+// иначе он остаётся в названии.
+const BIRTH_YEAR_RE = new RegExp(
+  `(?<![\\d.,])(1[89]\\d{2}|20[0-4]\\d)(?![\\d])(?:\\s*(?:г\\.|год[ауе]?))?(?:\\s*рождени[яею])?`,
+  "iu",
+);
+
+function matchBirthYear(text, maxYear) {
+  const m = String(text || "").match(BIRTH_YEAR_RE);
+  if (!m) return null;
+  const year = Number(m[1]);
+  if (year > maxYear) return null;
+  return { year, index: m.index, length: m[0].length };
+}
+
+// Родство склоняется не по общему правилу, а звучит чаще всего.
+// «Мужа» шипящее на конце: общее правило его не трогает, чтобы не портить
+// «Маша» и «Даша», — поэтому слово живёт здесь.
+const KIN_NOMINATIVE = {
+  "дочери": "дочь", "матери": "мать", "отца": "отец", "свекрови": "свекровь",
+  "тестя": "тесть", "племянницы": "племянница", "племянника": "племянник",
+  "мужа": "муж", "тещи": "теща", "снохи": "сноха", "зятя": "зять",
+  "кума": "кум", "кумы": "кума", "крестника": "крестник", "крестницы": "крестница",
+};
+// Мужские имена на «-ий» проверяем по списку, а не по окончанию: у «Марии»
+// и «Дмитрия» родительный падеж выглядит одинаково, и правило «-ия → -ий»
+// превратило бы Марию в Мария. Список закрытый — в нём только имена,
+// у которых именительный действительно кончается на «-ий».
+const MALE_IY_NAMES = new Set([
+  "анатолия", "аркадия", "валерия", "василия", "виталия", "геннадия",
+  "георгия", "григория", "дмитрия", "евгения", "игнатия", "иннокентия",
+  "леонтия", "юрия", "аполлония", "викентия", "прокопия", "сергия",
+  "терентия", "порфирия", "мефодия", "макария", "захария",
+]);
+// «Юлия» в список не берём: мужское имя Юлий сегодня почти не встречается,
+// а Юлия — обычное женское имя, и ошибка была бы куда заметнее выигрыша.
+// «Тимофея» тоже: его закрывает общее правило «-ея → -ей».
+// Грубое приведение родительного падежа к именительному — только для имени
+// в дне рождения. Шипящие в конце не трогаем: «Маша» и «Даша» — уже именительный,
+// а «Ивана» и «Петровича» без правила остались бы в родительном.
+const GENITIVE_TO_NOMINATIVE = [
+  [/ии$/u, "ия"],                            // Марии → Мария, Ксении → Ксения
+  [/ея$/u, "ей"],                            // Андрея → Андрей, Сергея → Сергей
+  [/ича$/u, "ич"],                           // Петровича → Петрович, Ильича → Ильич
+  [/ого$/u, "ой"],                           // зубного → зубной, Толстого → Толстой
+  [/овны$/u, "овна"], [/евны$/u, "евна"],    // Петровны → Петровна
+  [/([жшчщгкх])и$/u, "$1а"],                 // Даши → Даша, Луки → Лука
+  [/и$/u, "я"],                              // Пети → Петя, Оли → Оля, Ани → Аня
+  [/ы$/u, "а"],                              // мамы → мама, сестры → сестра
+  [/([бвгдзклмнпрстфх])а$/u, "$1"],          // Ивана → Иван, брата → брат
+];
+
+function toNominative(word) {
+  const key = normalize(word);
+  if (KIN_NOMINATIVE[key]) return KIN_NOMINATIVE[key];
+  if (MALE_IY_NAMES.has(key)) return capitalize(`${key.slice(0, -2)}ий`);
+  for (const [re, to] of GENITIVE_TO_NOMINATIVE) {
+    if (re.test(word)) return word.replace(re, to);
+  }
+  return word;
+}
+
+/** «день рождения Марии» → «Мария»; без имени возвращает пустую строку. */
+function bdayPerson(rest) {
+  const src = String(rest || "");
+  if (!BDAY_MARKER_RE.test(src)) return src;
+  let t = src
+    .replace(new RegExp(BDAY_MARKER_RE.source, "giu"), " ")
+    .replace(new RegExp(`${NBL}год(?:а|у)?\\s+рождени[яею]${NB}`, "giu"), " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  // «запиши», «напомни», «не забыть» — подводка к просьбе, а не часть имени.
+  // Снимаем её здесь же: иначе падеж применился бы к глаголу («запиши» → «запиша»).
+  for (let i = 0; i < 4; i += 1) {
+    const next = t.replace(LEAD_PUNCT, "").replace(LEAD_WORDS, "").trim();
+    if (next === t) break;
+    t = next;
+  }
+  // «у Пети», «у моей мамы» — предлог принадлежности к имени не относится.
+  t = t.replace(/^(?:у|у\s+мо(?:ей|его))\s+/iu, "");
+  t = t.replace(/^[\s,.:;—–-]+/u, "").replace(/[\s,.:;—–-]+$/u, "");
+  const words = t.split(/\s+/).filter(Boolean);
+  // Имя — это одно-три слова из букв. Всё остальное («поздравить маму с»)
+  // оставляем как есть: там падеж не про имя.
+  if (!words.length || words.length > 3) return t;
+  if (!words.every(w => /^[А-ЯЁа-яё-]{2,}$/u.test(w))) return t;
+  return words.map(toNominative).join(" ");
+}
+
+// ─── Платёж: сумма и название ───
+//
+// «поставь платеж 3000 за детский сад» — «поставь» и «платёж» это команда,
+// название записи — то, за что платят. Сумма живёт отдельно от названия.
+const PAY_CMD_LEAD = new RegExp(
+  `^(?:(?:поставь|поставить|сделай|сделать|внеси|внести|проведи|провести)[\\s,:;.—–-]+)?`
+  + `(?:плат[её]ж${W}*|оплат${W}*|заплат${W}*|уплат${W}*|перевести|переведи|перечисл${W}*|погасить|погаси)${NB}`
+  + `(?:\\s+(?:по|за|на)${NB})?[\\s,:;.—–-]*`,
+  "iu",
+);
+// «штраф оплатить», «налоги заплатить» — глагол может стоять и в хвосте.
+const PAY_CMD_TAIL = new RegExp(
+  `[\\s,:;.—–-]*${NBL}(?:оплатить|оплати|заплатить|заплати|уплатить|уплати|внести)$`,
+  "iu",
+);
+// Дата и время к этому месту уже вырезаны, так что оставшееся круглое число —
+// это деньги. Однозначные суммы не берём: «оплатить 2 счета» — не 2 рубля.
+const AMOUNT_RE = new RegExp(
+  `(?<![\\d.,:])(\\d{2,7})\\s*(тыс${W}*)?\\s*(?:руб${W}*|₽)?(?![\\d.,:])`,
+  "iu",
+);
+// «оплатить за интернет пятого», «платёж двадцатого» — в платеже голое
+// порядковое число это день месяца: слово «числа» человек проглатывает.
+const PAY_DAY_RE = new RegExp(`${NBL}(?:до\\s+)?${ORDINAL_DAY_PATTERN}${NB}`, "iu");
+
+function matchAmount(text) {
+  const m = String(text || "").match(AMOUNT_RE);
+  if (!m) return null;
+  const value = Number(m[1]) * (m[2] ? 1000 : 1);
+  if (!Number.isFinite(value) || value < 10 || value > 9999999) return null;
+  return { value, index: m.index, length: m[0].length };
+}
+
+// Словарь существительных бесконечен: няня, домофон, репетитор, вывоз мусора.
+// Примета платежа проще словаря — названа сумма и сказано, за что. Этого
+// хватает, чтобы не гадать по слову. Без суммы словарь по-прежнему главный:
+// «оплатить хостинг завтра» — дело, а не платёж.
+const PAY_VERB_RE = new RegExp(
+  `${NBL}(?:плат[её]ж${W}*|оплат${W}*|заплат${W}*|уплат${W}*|перевес(?:ти)${NB}|переведи${NB}|перечисл${W}*|погас${W}*)`,
+  "iu",
+);
+const PAY_FOR_RE = new RegExp(`${NBL}за\\s+${W}{3,}`, "iu");
+
+function looksLikePayment(text) {
+  const low = normalize(text);
+  return PAY_VERB_RE.test(low) && PAY_FOR_RE.test(low) && Boolean(matchAmount(low));
+}
+
+// Название платежа человек говорит в винительном: «за ипотеку», «за подписку».
+// Приводим к именительному тем же приёмом, что имя в дне рождения. Только
+// одно слово: в «кружок по рисованию» окончание принадлежит не названию.
+function billsNominative(title) {
+  const t = String(title || "").trim();
+  if (!t || /\s/.test(t)) return t;
+  if (/[ую]$/u.test(t)) return capitalize(toNominative(t.replace(/у$/u, "ы").replace(/ю$/u, "и")));
+  // «-ого» именительным не бывает ни у одного существительного, поправить
+  // безопасно. Форму на «-а» не трогаем: «за репетитора» и «аренда» с виду
+  // одинаковы, и правило сделало бы из «Аренда» — «Аренд».
+  if (/ого$/u.test(t)) return capitalize(toNominative(t));
+  return t;
+}
+
+function stripPayCommand(title) {
+  let t = String(title || "");
+  for (let i = 0; i < 3; i += 1) {
+    const next = t.replace(PAY_CMD_LEAD, "").replace(PAY_CMD_TAIL, "").trim();
+    if (next === t) break;
+    t = next;
+  }
+  t = t.replace(/^[\s,.:;—–-]+/u, "").replace(/[\s,.:;—–-]+$/u, "");
+  return junkOnly(t) ? "" : capitalize(t);
+}
+
+// «поставь два будильника на среду в 7 и в 8» — в одной просьбе несколько
+// будильников на один день. Разбор берёт первый час, остальные ищем тем же
+// правилом: союз «и» перед предлогом отличает второй будильник от случайного
+// числа в тексте.
+const ALARM_EXTRA_TIME_RE = new RegExp(
+  `${NBL}и\\s+(?:в|к|на)\\s+(\\d{1,2})(?:[:.](\\d{2}))?\\s*(?:час${W}*)?\\s*(утра|дня|вечера|ночи)?${NB}`,
+  "giu",
+);
+
+function extraAlarmTimes(base, when, ctx) {
+  if (!when.time || when.timer) return [];
+  const nowParts = zonedParts(ctx.now, ctx.tz);
+  const dayKnown = Boolean(when.date);
+  const out = [];
+  for (const m of normalize(base).matchAll(ALARM_EXTRA_TIME_RE)) {
+    const raw = Number(m[1]);
+    if (!Number.isFinite(raw) || raw > 23) continue;
+    const minute = m[2] ? Number(m[2]) : 0;
+    if (minute > 59) continue;
+    const hour = resolveHour(raw, minute, m[3] || "", nowParts, dayKnown, true);
+    if (hour === when.time.hour && minute === when.time.minute) continue;
+    if (out.some(t => t.hour === hour && t.minute === minute)) continue;
+    out.push({ hour, minute });
+  }
+  return out;
 }
 
 function splitChunks(text) {
@@ -2391,6 +2669,10 @@ function applyShelfPolicy(draft, base, when, ctx, settings) {
     // «поставь на 7», просыпался от него неделю и шёл искать, как выключить.
     // Ежедневный ставится словами — «каждый день», «по будням», «ежедневно»,
     // и тогда repeat приходит из разбора фразы.
+    // В настройках будильника режимов ровно четыре: однократно, ежедневно,
+    // по будням и выборочно по дням. «По выходным» своего режима не имеет —
+    // кладём его в выборочные, суббота и воскресенье.
+    if (draft.repeat?.kind === "weekends") draft.repeat = { kind: "weekly", days: [0, 6] };
     if (hasTime && !draft.date) {
       const nowParts = zonedParts(ctx.now, ctx.tz);
       const due = draft.time.hour * 60 + draft.time.minute;
@@ -2776,9 +3058,41 @@ export function parse(text, ctx) {
     // «поставь будильник» — отдельный тип: всегда громкий сигнал, не тихий пуш.
     const wantsClockAlarm = !when.timer && ALARM_RE.test(normalize(base));
     const kindHit = classifyKind(base);
-    const type = when.timer ? "task" : wantsClockAlarm ? "alarm" : kindHit.type;
+    // Сумма и «за что-то» перевешивают словарь: «заплатить 25000 за няню».
+    const payByAmount = !when.timer && !wantsClockAlarm
+      && kindHit.type === "task" && looksLikePayment(base);
+    const type = when.timer ? "task" : wantsClockAlarm ? "alarm" : payByAmount ? "bills" : kindHit.type;
     // «в заметки / положи в заметки» — полка, не место и не кусок названия.
     restText = restText.replace(NOTE_SHELF_PHRASE, " ").replace(/\s{2,}/g, " ").trim();
+    // Год рождения — своё поле карточки: по нему считаются полные годы.
+    // Из названия его убираем вместе с хвостом «года рождения».
+    let birthYear = null;
+    if (type === "bday") {
+      const maxYear = zonedParts(ctx.now, ctx.tz).year;
+      const inRest = matchBirthYear(restText, maxYear);
+      const hit = inRest || matchBirthYear(base, maxYear);
+      if (hit) birthYear = hit.year;
+      if (inRest) restText = cutRange(restText, inRest.index, inRest.length);
+      restText = bdayPerson(restText);
+    }
+    // Сумма платежа — тоже своё поле: в названии остаётся только то, за что платят.
+    let amount = null;
+    let payDate = null;
+    if (type === "bills") {
+      const amt = matchAmount(restText);
+      if (amt) {
+        amount = amt.value;
+        restText = cutRange(restText, amt.index, amt.length);
+      }
+      if (!when.date) {
+        const dayHit = restText.match(PAY_DAY_RE);
+        const day = dayHit ? ordinalDay(dayHit[1], dayHit[2]) : null;
+        if (day != null) {
+          payDate = dateOnDayNumber(day, zonedParts(ctx.now, ctx.tz));
+          restText = cutRange(restText, dayHit.index, dayHit[0].length);
+        }
+      }
+    }
     // Остаток после даты/времени — безопасный источник названия (без «завтра в 10»).
     const titleSeed = restText;
     // Слот place вырезаем из текста до названия — иначе «на Ти…» остаётся в title.
@@ -2832,13 +3146,27 @@ export function parse(text, ctx) {
       title = finalType === "meeting" ? `Встреча с ${who}` : finalType === "bday" ? who : `Клиент ${who}`;
     }
     if (!title) title = defaultItemTitle(when, finalType, base, ctx);
-    // «установи будильник на 7» → «Будильник», не «Установи будильник»; задачи вроде «установить приложение» не трогаем.
-    if ((finalType === "alarm" || when.timer) && /будильник/i.test(normalize(title))) {
-      title = defaultItemTitle(when, finalType, base, ctx);
+    // «установи будильник на 7» → «Будильник», не «Установи будильник»;
+    // «разбуди меня в семь тридцать» → «Будильник», а не «Разбуди меня».
+    // Если после команды что-то сказано («будильник на зарядку»), это и есть
+    // название — команду снимаем, смысл оставляем. Задачи вроде «установить
+    // приложение» сюда не попадают: тип у них не будильник.
+    if (finalType === "alarm" || when.timer) {
+      const rest = cleanTitle(
+        title.replace(new RegExp(ALARM_EXTRA_TIME_RE.source, "giu"), " ").replace(ALARM_CMD_TITLE_RE, " "),
+      );
+      title = isWeakTitle(rest) ? defaultItemTitle(when, finalType, base, ctx) : rest;
     }
     // Если who вырезали из title, а title стал пустым «Встреча» — вернём с именем.
     if (who && finalType === "meeting" && /^встреча$/i.test(title.trim())) {
       title = `Встреча с ${who}`;
+    }
+    // Без имени сам оборот и есть название: «День рождения» понятнее, чем «Без названия».
+    if (finalType === "bday" && (!title || title === "Без названия")) title = "День рождения";
+    if (finalType === "bills") {
+      const stripped = stripPayCommand(title);
+      if (stripped) title = billsNominative(stripped);
+      if (amount != null) title = `${title} — ${amount} ₽`;
     }
     const draft = {
       type: finalType,
@@ -2846,7 +3174,7 @@ export function parse(text, ctx) {
       place,
       who,
       phone,
-      date: when.date || null,
+      date: when.date || payDate || null,
       time: when.time || null,
       // Базово: у заметки/покупки/ухода/спорта/платежа время не обязательно.
       // Дело без часа не переспрашиваем голосом: запись уже создана на сегодня,
@@ -2863,11 +3191,21 @@ export function parse(text, ctx) {
       repeat: when.repeat || null,
       corrected,
       source: chunk,
-      kindScore: when.timer || wantsClockAlarm ? 95 : kindHit.score,
+      kindScore: when.timer || wantsClockAlarm ? 95 : payByAmount ? 88 : kindHit.score,
     };
     if (when.yearly) draft.yearly = true;
+    if (birthYear != null) draft.birthYear = birthYear;
+    if (amount != null) draft.amount = amount;
     applyShelfPolicy(draft, base, when, ctx, settings);
     drafts.push(draft);
+    // Второй и третий будильник из той же просьбы — та же запись, другой час.
+    if (finalType === "alarm") {
+      for (const time of extraAlarmTimes(base, when, ctx)) {
+        const extra = { ...draft, time, needsTime: false };
+        applyShelfPolicy(extra, base, { ...when, time }, ctx, settings);
+        drafts.push(extra);
+      }
+    }
   }
 
   // «Ой, и ещё забрать вещи» — разбиение отрезает голый вздох в отдельное дело.

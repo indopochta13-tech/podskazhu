@@ -61,9 +61,90 @@ check("облако на FAB монтируется после каждой по
   app.includes("mountShelfMicFab") && app.includes("requestAnimationFrame(mountFabSoul)"),
   "после смены полки облако на микрофоне не пересоздаётся");
 
+// ── Полки и значки: соответствие один к одному ────────────────────────
+//
+// Полосу переработали: слева платные полки, справа бесплатные. Легко
+// разъехаться — добавили полку в один список и забыли значок, или оставили
+// значок от полки, которую убрали. Читаем оба списка прямо из кода.
+
+function shelfList(name) {
+  const at = app.indexOf(`const ${name} = [`);
+  if (at < 0) return [];
+  const body = app.slice(at, app.indexOf("];", at));
+  return [...body.matchAll(/\{\s*id:\s*"([a-z]+)"/g)].map(m => m[1]);
+}
+
+const proStrip = shelfList("PRO_STRIP_SHELVES");
+const freeStrip = shelfList("FREE_STRIP_SHELVES");
+const strip = [...proStrip, ...freeStrip];
+const shelfIcons = Object.fromEntries(
+  [...icons.slice(icons.indexOf("export const SHELF_ICONS"))
+    .slice(0, icons.slice(icons.indexOf("export const SHELF_ICONS")).indexOf("};"))
+    .matchAll(/(\w+):\s*"(\w+)"/g)].map(m => [m[1], m[2]]),
+);
+
+check("оба списка полос прочитаны",
+  proStrip.length > 0 && freeStrip.length > 0,
+  `PRO ${proStrip.length}, free ${freeStrip.length} — разметка списков изменилась`);
+
+check("полок без значка нет",
+  strip.every(id => id === "shared" || Boolean(shelfIcons[id])),
+  `нет значка у: ${strip.filter(id => id !== "shared" && !shelfIcons[id]).join(", ")}`);
+
+check("значки в полосе рисуются из своего набора",
+  strip.every(id => id === "shared" || icons.includes(`${shelfIcons[id]}:`)),
+  "значок объявлен в SHELF_ICONS, но самого рисунка в наборе нет");
+
+check("каждый значок открывает свою полку",
+  app.includes('data-strip-shelf="${shelf.id}"')
+    && app.includes("openShelfFromStrip(stripShelf.dataset.stripShelf)")
+    && app.includes('return go("daily", { shelf: shelfId })'),
+  "кнопка не передаёт свой id — все значки откроют одну полку");
+
+check("общие списки уходят на свой экран, а не на полку",
+  app.includes('data-strip-go="lists"') && app.includes('stripGo?.dataset.stripGo === "lists"'),
+  "у общих списков нет своей полки — им нужен отдельный переход");
+
+check("полки в полосе не повторяются",
+  new Set(strip).size === strip.length,
+  `дубли: ${strip.filter((id, i) => strip.indexOf(id) !== i).join(", ")}`);
+
+// Списки платного и бесплатного должны сходиться с сервером: иначе полка
+// либо под замком без причины, либо бесплатная только на вид.
+const proShelves = readFileSync(new URL("../lib/pro-shelves.js", import.meta.url), "utf8");
+const serverPro = [...proShelves.slice(proShelves.indexOf("PRO_SHELF_IDS"))
+  .slice(0, proShelves.indexOf("]", proShelves.indexOf("PRO_SHELF_IDS")))
+  .matchAll(/"([a-z]+)"/g)].map(m => m[1]);
+
+check("платные полки полосы совпадают с серверными",
+  [...proStrip].sort().join(",") === [...serverPro].sort().join(","),
+  `полоса: ${proStrip.join(", ")} / сервер: ${serverPro.join(", ")}`);
+
+check("бесплатные полки сервер платными не считает",
+  freeStrip.every(id => !serverPro.includes(id)),
+  `сервер закрывает: ${freeStrip.filter(id => serverPro.includes(id)).join(", ")}`);
+
+// ── Замки ─────────────────────────────────────────────────────────────
+
+check("замок висит только на платных полках без подписки",
+  app.includes("const locked = !isPro();")
+    && /PRO_STRIP_SHELVES\.map\(shelf => shelfStripPillHtml\(shelf, \{\s*locked,/.test(app)
+    && /FREE_STRIP_SHELVES\.map\(shelf => shelfStripPillHtml\(shelf\)\)/.test(app),
+  "замок ставится не по подписке или попал на бесплатные полки");
+
+check("без подписки платная полка не открывается молча",
+  app.includes("proShelfGated(shelfId)"),
+  "полка под замком откроется как обычная");
+
+// ── Выделение активной полки ──────────────────────────────────────────
+
+check("активная полка помечена и для скринридера",
+  app.includes('aria-current="${active ? "page" : "false"}"'),
+  "выделение только цветом — на слух полку не отличить");
+
 // ── Стили полосы ──────────────────────────────────────────────────────
 
-const strip = rule(".shelf-strip");
+const stripRule = rule(".shelf-strip");
 check("полоса PRO не даёт overflow на календарь",
   !rule(".shelf-strip--pro").includes("overflow: visible")
     && rule(".shelf-strip").includes("overflow: hidden"),
@@ -77,13 +158,13 @@ check("замок PRO — accent и внутри кнопки",
   "замок приглушён или обрезается полосой");
 
 check("полоса не переносится",
-  strip.includes("flex-wrap: nowrap"),
+  stripRule.includes("flex-wrap: nowrap"),
   "без nowrap значки уйдут на вторую строку");
 check("полоса занимает только свободное место",
-  strip.includes("flex: 1 1 0") && strip.includes("min-width: 0"),
+  stripRule.includes("flex: 1 1 0") && stripRule.includes("min-width: 0"),
   "с «flex: 1 1 auto» полоса выдавливает подписку и настройки за край");
 check("значки выровнены по центру строки",
-  strip.includes("align-items: center"),
+  stripRule.includes("align-items: center"),
   "без этого полоса поедет вверх относительно боковых кнопок");
 
 const pill = rule(".shelf-pill");

@@ -12,6 +12,23 @@ import {
   isDemoItemId,
 } from "/demo-shelves.js";
 import { PRO_SHELF_PROMO } from "/pro-shelf-promo.js";
+import {
+  SPORT_WEEK_ORDER,
+  SPORT_DAY_LABELS,
+  SPORT_MUSCLE_GROUPS,
+  defaultSportPlan,
+  defaultSportNotify,
+  defaultSportExercise,
+  normalizeSportPlan,
+  normalizeSportNotify,
+  seedSportPlan,
+  sportDayHasWorkout,
+  sportPlanFilled,
+  sportDaySummary,
+  sportExerciseMeta,
+  sportVisibleWeekdays,
+} from "/sport-plan.js";
+import { sportMuscleIcon } from "/sport-icons.js";
 
 /** Автовыбор простого режима на слабых устройствах (настройка может переопределить). */
 function preferSimpleCloud() {
@@ -315,7 +332,7 @@ const EMPTY_SHELF = {
   buy: "Покупок нет.<br/>Скажите «купить хлеб и молоко» — попадёт сюда, срок не нужен.",
   bills: "Платежей нет.<br/>Скажите «20 числа каждый месяц передать показания» — напомню за сутки.",
   health: "Плана витаминов нет.<br/>Откройте полку ещё раз — загрузится ваш план.",
-  sport: "Тренировок нет.<br/>Скажите «вторник и четверг в 19 тренировка ноги» — график встанет сам.",
+  sport: "Нажмите на день недели — увидите упражнения, подходы и вес.<br/>Колокольчик справа — время напоминания.",
   care: "Протокола ухода нет.<br/>Нажмите + или скажите «утренний уход».",
   alarms: "Будильников нет.<br/>Нажмите + или скажите «поставь будильник на 7».",
 };
@@ -664,7 +681,9 @@ function canArchiveItem(item) {
   return true;
 }
 
-const SHELF_MANUAL_ADD_IDS = new Set(["care", "sport", "health", "bday", "meters", "bills", "alarms"]);
+const SHELF_MANUAL_ADD_IDS = new Set(["care", "health", "bday", "meters", "bills", "alarms"]);
+/** Полки с ручным + без голосового FAB. */
+const NO_MIC_SHELF_IDS = new Set(["sport", "care", "health", "meters"]);
 
 /** Главный календарь (shelves) — не демо-полка: + и микрофон всегда видны. */
 function shelfFabDemoBlocked() {
@@ -679,7 +698,8 @@ function shelfNeedsAddFab() {
   if (shelfFabDemoBlocked()) return false;
   if (state.screen === "lists" && state.listId) return true;
   if (state.screen === "shelves") return true;
-  if (state.screen === "daily") return SHELF_MANUAL_ADD_IDS.has(state.shelf);
+  if (state.screen === "daily") return SHELF_MANUAL_ADD_IDS.has(state.shelf) || state.shelf === "sport";
+  if (state.screen === "sportDay") return true;
   return false;
 }
 
@@ -687,7 +707,11 @@ function shelfNeedsMicFab() {
   if (shelfFabDemoBlocked()) return false;
   if (state.screen === "lists" && state.listId) return true;
   if (state.screen === "shelves") return true;
-  if (state.screen === "daily") return DAILY_SHELF_IDS.has(state.shelf);
+  if (state.screen === "sportDay") return false;
+  if (state.screen === "daily") {
+    if (NO_MIC_SHELF_IDS.has(state.shelf)) return false;
+    return DAILY_SHELF_IDS.has(state.shelf);
+  }
   return false;
 }
 
@@ -753,7 +777,7 @@ async function addManualShelfItem(shelfId, opts = {}) {
   const draft = isBday ? {
     type: "bday",
     shelf: "bday",
-    title: "День рождения",
+    title: "",
     date: now,
     time: { hour: 9, minute: 0 },
     yearly: true,
@@ -963,6 +987,30 @@ function meterMonthWindow(item) {
   const w = item?.monthWindow;
   if (w && Number.isFinite(w.fromDay) && Number.isFinite(w.toDay)) return w;
   return { fromDay: 15, toDay: 26 };
+}
+
+function meterReadingsPending(item) {
+  if (!isMeterItem(item) || item.cancelled || item.archived) return false;
+  const now = todayParts();
+  const win = meterMonthWindow(item);
+  if (now.day < win.fromDay || now.day > win.toDay) return false;
+  const d = item.date || now;
+  if (d.year > now.year) return false;
+  if (d.year === now.year && d.month > now.month) return false;
+  return true;
+}
+
+async function markMeterReadingsDone(item) {
+  const d = item.date || todayParts();
+  let month = d.month + 1;
+  let year = d.year;
+  if (month > 11) { month = 0; year += 1; }
+  absorb(await api(`/items/${item.id}`, {
+    method: "PATCH",
+    body: {
+      date: { year, month, day: meterMonthWindow(item).fromDay },
+    },
+  }));
 }
 
 function detailSwipeRow(inner, delKey) {
@@ -1266,9 +1314,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.77";
+const APP_VERSION = "1.9.93";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 155;
+const SW_VERSION = 171;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -1364,6 +1412,13 @@ const state = {
   familyScrollBottom: false,
   billingPlanOpen: null,
   proShelfDemoModal: null,
+  sportDayWeekday: null,
+  sportNotifyOpen: false,
+  sportNotifyDraft: null,
+  sportNotifyPickDay: null,
+  sportExerciseDraft: null,
+  sportMusclePickOpen: false,
+  sportSeedBusy: false,
   scrollToSubscription: false,
   apkVersion: "",
   online: navigator.onLine,
@@ -1955,6 +2010,78 @@ async function setHealthShelfDay(weekday, on) {
   if (NATIVE && Array.isArray(state.items)) NATIVE.syncReminders(state.items, state.user?.settings);
 }
 
+function sportSettingsPlan() {
+  return normalizeSportPlan(state.user?.settings?.sportPlan || defaultSportPlan());
+}
+
+function sportSettingsNotify() {
+  return normalizeSportNotify(state.user?.settings?.sportNotify || defaultSportNotify());
+}
+
+function sportPlanSyncedWithNotify(plan, notify) {
+  const next = normalizeSportPlan(plan);
+  for (let d = 0; d < 7; d += 1) {
+    const slot = notify[d];
+    const day = next.days[d];
+    if (!slot?.enabled) {
+      if (!day.restDay) next.days[d] = { ...day, restDay: true };
+    } else if (day.restDay) {
+      next.days[d] = { ...day, restDay: false };
+    }
+  }
+  return next;
+}
+
+async function saveSportSettings({ sportPlan, sportNotify, sportPlanV1 } = {}) {
+  const body = {};
+  if (sportPlan) body.sportPlan = sportPlan;
+  if (sportNotify) body.sportNotify = sportNotify;
+  if (typeof sportPlanV1 === "boolean") body.sportPlanV1 = sportPlanV1;
+  absorb(await api("/settings", { method: "POST", body }));
+  if (NATIVE && Array.isArray(state.items)) NATIVE.syncReminders(state.items, state.user?.settings);
+}
+
+async function ensureSportPlan() {
+  if (state.user?.settings?.sportPlanV1 || state.sportSeedBusy) return false;
+  state.sportSeedBusy = true;
+  try {
+    await saveSportSettings({
+      sportPlan: seedSportPlan(),
+      sportNotify: defaultSportNotify(),
+      sportPlanV1: true,
+    });
+    return true;
+  } finally {
+    state.sportSeedBusy = false;
+  }
+}
+
+function sportDayPlan(weekday) {
+  const plan = sportSettingsPlan();
+  return plan.days[weekday] || defaultSportPlan().days[weekday];
+}
+
+async function patchSportDay(weekday, patch) {
+  const plan = sportSettingsPlan();
+  plan.days[weekday] = { ...sportDayPlan(weekday), ...patch };
+  await saveSportSettings({ sportPlan: plan });
+}
+
+async function saveSportExercise(weekday, index, exercise) {
+  const day = sportDayPlan(weekday);
+  const exercises = [...(day.exercises || [])];
+  if (index == null || index < 0) exercises.push(exercise);
+  else exercises[index] = exercise;
+  await patchSportDay(weekday, { exercises, restDay: false });
+}
+
+async function deleteSportExercise(weekday, index) {
+  const day = sportDayPlan(weekday);
+  const exercises = [...(day.exercises || [])];
+  exercises.splice(index, 1);
+  await patchSportDay(weekday, { exercises });
+}
+
 function healthAppliesOnDay(item, weekday) {
   const days = healthDaysOf(item);
   if (!days.size) return false;
@@ -2488,11 +2615,31 @@ function goImpl(screen, params = {}) {
   state.screen = screen;
   if (params.shelf) state.shelf = params.shelf;
   if (params.itemId !== undefined) state.itemId = params.itemId;
+  if (screen === "sportDay") {
+    state.sportDayWeekday = Number(params.weekday);
+    state.sportExerciseDraft = null;
+    state.sportMusclePickOpen = false;
+    state.shelf = "sport";
+  } else if (screen !== "sportDay") {
+    state.sportDayWeekday = null;
+    state.sportExerciseDraft = null;
+    state.sportMusclePickOpen = false;
+  }
+  if (screen !== "daily" && screen !== "sportDay") {
+    state.sportNotifyOpen = false;
+    state.sportNotifyDraft = null;
+    state.sportNotifyPickDay = null;
+  } else if (screen === "daily" && params.shelf && params.shelf !== "sport") {
+    state.sportNotifyOpen = false;
+    state.sportNotifyDraft = null;
+    state.sportNotifyPickDay = null;
+  }
   state.picker = null;
   render();
 }
 
 function shelfItemCount(shelfId) {
+  if (shelfId === "sport") return sportPlanFilled(sportSettingsPlan()) ? 1 : 0;
   return state.items.filter(i => {
     if (!i || i.cancelled || i.archived) return false;
     if (shelfId === "alarms") return isAlarmItem(i);
@@ -2695,6 +2842,7 @@ function render() {
     shelves: renderShelves,
     daily: renderDaily,
     detail: renderDetail,
+    sportDay: renderSportDay,
     settings: renderSettings,
     "shelf-edit": renderShelfEdit,
     "shelf-prefs": renderShelfPrefs,
@@ -2711,10 +2859,10 @@ function render() {
   else stopListPoll();
 }
 
-function bar(title, { back = null, right = "" } = {}) {
+function bar(title, { back = null, backShelf = null, right = "" } = {}) {
   return `
     <div class="bar">
-      ${back ? `<button class="icon-btn" data-go="${back}" data-back aria-label="Назад">${ICONS.back}</button>` : '<span class="spacer"></span>'}
+      ${back ? `<button class="icon-btn" data-go="${back}"${backShelf ? ` data-shelf="${backShelf}"` : ""} data-back aria-label="Назад">${ICONS.back}</button>` : '<span class="spacer"></span>'}
       <h2>${esc(title)}</h2>
       ${right}
     </div>
@@ -2769,18 +2917,10 @@ async function finishAccountDeletion() {
   `;
 }
 
-/** Восстановление по ключу — без старой сессии: иначе 401 превращается в «Нужен вход».
+/** Восстановление по ключу. auth:false — 401 значит «ключ не подходит», а не «Нужен вход».
+ *  Сессию до ответа не сносим: иначе после ошибки уходит экран и кнопка залипает disabled.
  *  Согласие не шлём в теле: на сервере уже лежит user.settings.consent — клиент подхватит его из ответа. */
 async function restoreByTransferKey(key) {
-  store.token = "";
-  state.user = null;
-  state.items = [];
-  state.incoming = [];
-  state.contacts = [];
-  state.lists = [];
-  if (NATIVE?.clearSession) {
-    try { await NATIVE.clearSession(); } catch { /* ignore */ }
-  }
   const data = await api("/restore", {
     method: "POST",
     body: { key, tz: tz() },
@@ -2789,6 +2929,38 @@ async function restoreByTransferKey(key) {
   store.token = data.token;
   absorb(data);
   return data;
+}
+
+/** Форма переноса: после ошибки снова включаем кнопку и чистим текст при правке ключа. */
+function mountTransferRestoreForm(root, { inputSelector, buttonId, errorSelector, onSuccess }) {
+  const input = root.querySelector(inputSelector);
+  const errorEl = root.querySelector(errorSelector);
+  const findButton = () => root.querySelector(`#${buttonId}`) || document.getElementById(buttonId);
+
+  input?.addEventListener("input", () => {
+    if (errorEl) errorEl.textContent = "";
+    const btn = findButton();
+    if (btn) btn.disabled = false;
+  });
+
+  findButton()?.addEventListener("click", async (event) => {
+    const key = input?.value.trim();
+    if (!key) {
+      if (errorEl) errorEl.textContent = "Вставьте ключ переноса";
+      return;
+    }
+    event.currentTarget.disabled = true;
+    if (errorEl) errorEl.textContent = "";
+    try {
+      await restoreByTransferKey(key);
+      await onSuccess?.();
+    } catch (err) {
+      if (errorEl) errorEl.textContent = err.message;
+    } finally {
+      const btn = findButton();
+      if (btn) btn.disabled = false;
+    }
+  });
 }
 
 function finishTransferKeyRestore() {
@@ -3075,22 +3247,11 @@ function renderAuth() {
     errorEl.textContent = "";
   });
 
-  viewEl.querySelector("#auth-restore")?.addEventListener("click", async (event) => {
-    const key = viewEl.querySelector('input[name="key"]')?.value.trim();
-    if (!key) {
-      errorEl.textContent = "Вставьте ключ переноса";
-      return;
-    }
-    event.currentTarget.disabled = true;
-    errorEl.textContent = "";
-    try {
-      await restoreByTransferKey(key);
-      finishTransferKeyRestore();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    } finally {
-      event.currentTarget.disabled = false;
-    }
+  mountTransferRestoreForm(viewEl, {
+    inputSelector: '[data-auth-form="restore"] input[name="key"]',
+    buttonId: "auth-restore",
+    errorSelector: "[data-auth-error]",
+    onSuccess: finishTransferKeyRestore,
   });
 
   mountAuthTryHandlers();
@@ -3113,28 +3274,16 @@ function renderAuthRestore() {
       </div>
     </section>
   `;
-  const errorEl = viewEl.querySelector("[data-auth-error]");
   viewEl.querySelector("#auth-restore-back")?.addEventListener("click", () => {
     state.authFlow = null;
     if (consentPending()) renderConsent();
     else renderAuth();
   });
-  viewEl.querySelector("#auth-restore")?.addEventListener("click", async (event) => {
-    const key = viewEl.querySelector('input[name="key"]')?.value.trim();
-    if (!key) {
-      errorEl.textContent = "Вставьте ключ переноса";
-      return;
-    }
-    event.currentTarget.disabled = true;
-    errorEl.textContent = "";
-    try {
-      await restoreByTransferKey(key);
-      finishTransferKeyRestore();
-    } catch (err) {
-      errorEl.textContent = err.message;
-    } finally {
-      event.currentTarget.disabled = false;
-    }
+  mountTransferRestoreForm(viewEl, {
+    inputSelector: 'input[name="key"]',
+    buttonId: "auth-restore",
+    errorSelector: "[data-auth-error]",
+    onSuccess: finishTransferKeyRestore,
   });
 }
 
@@ -5242,6 +5391,7 @@ function renderDaily() {
   if (state.shelf === "alarms") return renderAlarmsShelf(true);
   if (state.shelf === "care") return renderCareShelf(true);
   if (state.shelf === "health") return renderHealthShelf(true);
+  if (state.shelf === "sport") return renderSportShelf(true);
 
   const list = shelfItems(state.shelf);
   viewEl.innerHTML = `
@@ -5609,6 +5759,281 @@ function healthTimeModal(draft) {
   `;
 }
 
+function sportNotifyRightBtn() {
+  return `<button type="button" class="icon-btn sport-notify-btn" id="sport-notify-open" aria-label="Напоминания о тренировках">${ICONS.bell}</button>`;
+}
+
+function sportMuscleChips(groups) {
+  const list = (groups || []).filter(Boolean).slice(0, 6);
+  if (!list.length) return "";
+  return `<div class="sport-day-card-meta">${list.map(g =>
+    `<span class="sport-muscle-chip">${sportMuscleIcon(g, 30)}<span>${esc(g)}</span></span>`).join("")}</div>`;
+}
+
+function sportDayCard(weekday) {
+  const day = sportDayPlan(weekday);
+  const active = sportDayHasWorkout(day);
+  const summary = sportDaySummary(day);
+  const count = day.exercises?.length || 0;
+  return `
+    <div class="sport-day-block">
+      <div class="sport-day-head">${esc(SPORT_DAY_LABELS[weekday])}</div>
+      <button type="button" class="sport-day-card ${active ? "" : "sport-day-card--rest"}" data-sport-day="${weekday}">
+        <div class="sport-day-card-title">${esc(summary)}</div>
+        ${sportMuscleChips(day.muscleGroups)}
+        ${count && active ? `<div class="sport-day-card-count">${count} упражн.</div>` : ""}
+      </button>
+    </div>
+  `;
+}
+
+function renderSportShelf(daily = false) {
+  if (proShelfGated("sport")) {
+    viewEl.innerHTML = proShelfPromoScreenHtml("sport", { back: "shelves" });
+    return;
+  }
+  const plan = sportSettingsPlan();
+  const notify = sportSettingsNotify();
+  const visibleDays = sportVisibleWeekdays(notify);
+  const notifyDraft = state.sportNotifyOpen ? (state.sportNotifyDraft || notify) : null;
+  viewEl.innerHTML = `
+    <section class="screen">
+      ${offlineBar()}
+      ${daily
+        ? bar(labelOfShelf("sport"), { back: "shelves", right: sportNotifyRightBtn() })
+        : `${shelfTabs("sport")}`}
+      ${promptCard()}
+      <div class="scroll pad-fab ${shelfFabPadClass()} sport-board">
+        ${sportPlanFilled(plan) && visibleDays.length
+          ? `<div class="sport-week">${visibleDays.map(d => sportDayCard(d)).join("")}</div>`
+          : `<div class="empty">${EMPTY_SHELF.sport}</div>`}
+      </div>
+      ${shelfFabStack()}
+      ${notifyDraft
+        ? (state.sportNotifyPickDay != null
+          ? sportNotifyTimeModal(state.sportNotifyPickDay, notifyDraft)
+          : sportNotifyModal(notifyDraft))
+        : ""}
+    </section>
+  `;
+  viewEl.querySelector(".tabs .tab.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (notifyDraft) mountSportNotifyWheels(notifyDraft);
+  mountShelfMicFab();
+  if (!state.user?.settings?.sportPlanV1 && !state.sportSeedBusy) {
+    ensureSportPlan().then(changed => {
+      if (changed && state.screen === "daily" && state.shelf === "sport") renderSportShelf(true);
+    });
+  }
+}
+
+function sportExerciseRow(ex, index) {
+  const meta = sportExerciseMeta(ex);
+  return `
+    <div class="sport-exercise" data-sport-exercise="${index}">
+      <div class="sport-exercise-main">
+        <div class="sport-exercise-name">${esc(ex.name)}</div>
+        ${ex.muscleGroup ? `<div class="sport-exercise-muscle">${esc(ex.muscleGroup)}</div>` : ""}
+        ${meta ? `<div class="sport-exercise-meta">${esc(meta)}</div>` : ""}
+        ${ex.notes ? `<div class="sport-exercise-note">${esc(ex.notes)}</div>` : ""}
+      </div>
+      <button type="button" class="care-edit" data-sport-exercise-edit="${index}" aria-label="Изменить">${ICONS.pencil}</button>
+    </div>
+  `;
+}
+
+function renderSportDay() {
+  const weekday = Number(state.sportDayWeekday);
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return go("daily", { shelf: "sport" });
+  const day = sportDayPlan(weekday);
+  const draft = state.sportExerciseDraft;
+  viewEl.innerHTML = `
+    <section class="screen">
+      ${offlineBar()}
+      ${bar(SPORT_DAY_LABELS[weekday], { back: "daily", backShelf: "sport" })}
+      ${promptCard()}
+      <div class="scroll pad-fab ${shelfFabPadClass()} sport-day-screen">
+        <label class="field">
+          <span>Название тренировки</span>
+          <input id="sport-day-title" value="${esc(day.title || "")}" placeholder="Например: ноги" maxlength="80" />
+        </label>
+        <label class="field">
+          <span>Группы мышц</span>
+          <input id="sport-day-muscles" value="${esc((day.muscleGroups || []).join(", "))}" placeholder="Ноги, пресс" maxlength="120" />
+        </label>
+        <div class="sport-section-head">План тренировок</div>
+        <div class="sport-exercise-list">
+          ${(day.exercises || []).map((ex, i) => sportExerciseRow(ex, i)).join("")
+            || `<div class="care-empty">Упражнений нет — нажмите + ниже</div>`}
+        </div>
+      </div>
+      ${shelfFabStack()}
+      ${draft ? sportExerciseModal(draft) : ""}
+    </section>
+  `;
+  mountSportDayFields();
+  mountShelfMicFab();
+}
+
+function mountSportDayFields() {
+  const weekday = state.sportDayWeekday;
+  if (!Number.isInteger(weekday)) return;
+  const titleEl = document.getElementById("sport-day-title");
+  const musclesEl = document.getElementById("sport-day-muscles");
+  titleEl?.addEventListener("blur", () => {
+    if (blockDemoMutation("sport")) return;
+    patchSportDay(weekday, { title: titleEl.value.trim() }).catch(() => {});
+  });
+  musclesEl?.addEventListener("blur", () => {
+    if (blockDemoMutation("sport")) return;
+    const muscleGroups = musclesEl.value.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+    patchSportDay(weekday, { muscleGroups }).catch(() => {});
+  });
+}
+
+function sportNotifyRow(weekday, slot) {
+  const time = `${String(slot.hour).padStart(2, "0")}:${String(slot.minute).padStart(2, "0")}`;
+  const on = Boolean(slot.enabled);
+  return `
+    <div class="sport-notify-row ${on ? "" : "sport-notify-row--off"}">
+      <div class="sport-notify-day">${esc(SPORT_DAY_LABELS[weekday])}</div>
+      <button type="button" class="sport-notify-time" data-sport-notify-pick="${weekday}" aria-label="Время ${esc(SPORT_DAY_LABELS[weekday])}">
+        ${esc(time)}
+      </button>
+      <span class="toggle sport-notify-toggle ${on ? "on" : ""}" data-sport-notify-toggle="${weekday}" role="switch" aria-checked="${on ? "true" : "false"}" aria-label="${on ? "Выключить" : "Включить"} ${esc(SPORT_DAY_LABELS[weekday])}"><i></i></span>
+    </div>
+  `;
+}
+
+function sportNotifyModal(draft) {
+  return `
+    <div class="alarm-overlay" id="sport-notify-overlay">
+      <div class="alarm-modal sport-notify-modal">
+        <div class="alarm-modal-title">Напоминания</div>
+        <div class="alarm-modal-sub">«Сегодня тренировка в …» — в включённые дни с упражнениями</div>
+        <div class="sport-notify-list">
+          ${SPORT_WEEK_ORDER.map(d => sportNotifyRow(d, draft[d] || defaultSportNotify()[d])).join("")}
+        </div>
+        <div class="alarm-modal-actions">
+          <button type="button" class="btn ghost" id="sport-notify-cancel">Отмена</button>
+          <button type="button" class="btn" id="sport-notify-done">Готово</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function sportNotifyTimeModal(weekday, draft) {
+  const slot = draft[weekday] || { hour: 19, minute: 0 };
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+  const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+  return `
+    <div class="alarm-overlay" id="sport-notify-time-overlay">
+      <div class="alarm-modal">
+        <div class="alarm-modal-title">${esc(SPORT_DAY_LABELS[weekday])}</div>
+        <div class="alarm-modal-sub">Время напоминания</div>
+        <div class="alarm-wheels">
+          <div class="alarm-wheel-col">
+            <div class="alarm-wheel-lab">ч</div>
+            ${wheel(hours, slot.hour, `sport-notify-hour-${weekday}`)}
+          </div>
+          <div class="alarm-wheel-col">
+            <div class="alarm-wheel-lab">м</div>
+            ${wheel(minutes, slot.minute, `sport-notify-minute-${weekday}`)}
+          </div>
+        </div>
+        <div class="alarm-modal-actions">
+          <button type="button" class="btn ghost" id="sport-notify-time-cancel">Назад</button>
+          <button type="button" class="btn" id="sport-notify-time-done">Готово</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function sportMusclePickerModal(current) {
+  const rows = [
+    `<button type="button" class="sport-muscle-pick-row ${!current ? "on" : ""}" data-sport-muscle-pick="">
+      <span class="sport-muscle-pick-ico"></span>
+      <span class="sport-muscle-pick-lab">—</span>
+      <span class="sport-muscle-pick-radio ${!current ? "on" : ""}"><i></i></span>
+    </button>`,
+    ...SPORT_MUSCLE_GROUPS.map(g =>
+      `<button type="button" class="sport-muscle-pick-row ${g === current ? "on" : ""}" data-sport-muscle-pick="${esc(g)}">
+        <span class="sport-muscle-pick-ico">${sportMuscleIcon(g, 38)}</span>
+        <span class="sport-muscle-pick-lab">${esc(g)}</span>
+        <span class="sport-muscle-pick-radio ${g === current ? "on" : ""}"><i></i></span>
+      </button>`),
+  ].join("");
+  return `
+    <div class="alarm-overlay" id="sport-muscle-pick-overlay">
+      <div class="alarm-modal sport-muscle-pick-modal">
+        <div class="alarm-modal-title">Группа мышц</div>
+        <div class="sport-muscle-pick-list">${rows}</div>
+      </div>
+    </div>
+  `;
+}
+
+function sportExerciseModal(draft) {
+  const ex = draft.exercise || defaultSportExercise();
+  const muscleLabel = ex.muscleGroup || "—";
+  return `
+    <div class="alarm-overlay" id="sport-exercise-overlay">
+      <div class="alarm-modal sport-exercise-modal">
+        <div class="alarm-modal-title">${draft.index == null ? "Новое упражнение" : "Упражнение"}</div>
+        <label class="field">
+          <span>Название</span>
+          <input id="sport-ex-name" value="${esc(ex.name)}" maxlength="80" autofocus />
+        </label>
+        <label class="field">
+          <span>Группа мышц</span>
+          <button type="button" class="sport-ex-muscle-btn" id="sport-ex-muscle-open">
+            ${ex.muscleGroup ? `<span class="sport-ex-muscle-ico">${sportMuscleIcon(ex.muscleGroup, 30)}</span>` : ""}
+            <span class="sport-ex-muscle-lab">${esc(muscleLabel)}</span>
+            <span class="row-chevron sport-ex-muscle-chevron">${ICONS.chevron}</span>
+          </button>
+        </label>
+        <div class="sport-ex-grid">
+          <label class="field"><span>Подходы</span><input id="sport-ex-sets" type="number" inputmode="numeric" min="1" max="20" value="${ex.sets || 3}" /></label>
+          <label class="field"><span>Повторы</span><input id="sport-ex-reps" value="${esc(ex.reps || "")}" maxlength="24" placeholder="8-10" /></label>
+          <label class="field"><span>Вес</span><input id="sport-ex-weight" value="${esc(ex.weight || "")}" maxlength="32" placeholder="60 кг" /></label>
+          <label class="field"><span>Отдых</span><input id="sport-ex-rest" value="${esc(ex.rest || "")}" maxlength="24" placeholder="90 сек" /></label>
+        </div>
+        <label class="field">
+          <span>Заметка</span>
+          <input id="sport-ex-notes" value="${esc(ex.notes || "")}" maxlength="240" placeholder="не обязательно" />
+        </label>
+        <div class="alarm-modal-actions">
+          ${draft.index != null ? `<button type="button" class="btn ghost danger" id="sport-ex-delete">Удалить</button>` : ""}
+          <button type="button" class="btn ghost" id="sport-ex-cancel">Отмена</button>
+          <button type="button" class="btn" id="sport-ex-save">Сохранить</button>
+        </div>
+      </div>
+      ${state.sportMusclePickOpen ? sportMusclePickerModal(ex.muscleGroup) : ""}
+    </div>
+  `;
+}
+
+function mountSportNotifyWheels(draft) {
+  viewEl.querySelectorAll(".wheel").forEach(w => {
+    w.scrollTop = Number(w.dataset.index || 0) * 40;
+    let timer = null;
+    w.addEventListener("scroll", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const items = [...w.querySelectorAll(".wheel-item")];
+        const idx = Math.min(items.length - 1, Math.max(0, Math.round(w.scrollTop / 40)));
+        items.forEach((el, i) => el.classList.toggle("on", i === idx));
+        const key = w.dataset.wheel || "";
+        const m = key.match(/^sport-notify-hour-(\d)$/);
+        if (m) draft[Number(m[1])].hour = idx;
+        const m2 = key.match(/^sport-notify-minute-(\d)$/);
+        if (m2) draft[Number(m2[1])].minute = idx;
+      }, 60);
+    });
+  });
+}
+
 function renderArchiveShelf() {
   const list = shelfItems("archive");
   viewEl.innerHTML = `
@@ -5895,6 +6320,10 @@ function itemCard(item, opts = {}) {
                   <span>Установить время</span>
                 </button>
               </div>` : ""}
+            ${isMeterItem(item) && state.shelf === "meters" && meterReadingsPending(item) ? `
+              <div class="set-time-row">
+                <button type="button" class="btn block meters-done-btn" data-meters-done="${item.id}">показания внесены</button>
+              </div>` : ""}
           </div>
         </div>
       </div>
@@ -5965,7 +6394,7 @@ function detailShowFields(item) {
   if (state.detailShowItemId !== item.id || !state.detailShow) {
     const isBday = item.type === "bday";
     state.detailShow = {
-      who: isBday || Boolean(String(item.who || "").trim()),
+      who: !isBday && Boolean(String(item.who || "").trim()),
       place: !isBday && Boolean(String(item.place || "").trim()),
       phone: Boolean(String(item.phone || "").trim()),
       note: Boolean(String(item.note || "").trim()),
@@ -5988,9 +6417,12 @@ function renderDetail() {
   const date = item.date || todayParts();
   const time = item.time || { hour: 9, minute: 0 };
   const days = Array.from({ length: 31 }, (_, i) => String(i + 1));
-  const meterDays = Array.from({ length: 12 }, (_, i) => String(i + 15));
   const meterWin = meterMonthWindow(item);
-  const meterDayIdx = Math.max(0, Math.min(11, (date.day || meterWin.fromDay) - 15));
+  if (isMeter && !item.monthWindow) item.monthWindow = { ...meterWin };
+  const meterFromDays = Array.from({ length: 28 }, (_, i) => String(i + 1));
+  const meterToDays = Array.from({ length: 31 }, (_, i) => String(i + 1));
+  const meterFromIdx = Math.max(0, Math.min(27, meterWin.fromDay - 1));
+  const meterToIdx = Math.max(0, Math.min(30, meterWin.toDay - 1));
   const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
   const minuteIdx = Math.max(0, MINS.indexOf(String(time.minute).padStart(2, "0")));
   const remindIdx = Math.max(0, REMIND_OFFSETS.findIndex(r => r.v === item.remind));
@@ -6006,7 +6438,7 @@ function renderDetail() {
   viewEl.innerHTML = `
     <section class="screen">
       ${offlineBar()}
-      ${bar("Карточка", { back: "shelves" })}
+      ${bar("Карточка", { back: isMeter ? "daily" : "shelves", backShelf: isMeter ? "meters" : null })}
       <div class="scroll pad-bottom">
         ${isCare ? `
           <label class="field">
@@ -6034,7 +6466,7 @@ function renderDetail() {
         <div class="detail-summary">
           <div class="detail-summary-title">${esc(item.title)}</div>
           <div class="detail-summary-when">${esc(fmtWhen(item))}</div>
-          ${whoText ? `<div class="detail-line">👤 ${esc(whoText)}</div>` : ""}
+          ${!isBday && whoText ? `<div class="detail-line">👤 ${esc(whoText)}</div>` : ""}
           ${placeText ? `<div class="detail-line">📍 ${esc(placeText)}</div>` : ""}
           ${phoneText ? `<div class="detail-line detail-phone">
             <span>📞 ${esc(phoneText)}</span>
@@ -6044,26 +6476,52 @@ function renderDetail() {
         </div>
 
         <label class="field">
-          <span>Название</span>
-          <input id="f-title" value="${esc(item.title)}" />
+          <span>${isBday ? "Именинник" : "Название"}</span>
+          <input id="f-title" value="${esc(item.title)}" placeholder="" />
         </label>
+        ${isMeter ? `
+        <div class="meter-when-block">
+          <div class="meter-when-lab">Когда</div>
+          <div class="meter-range-row">
+            <div class="pick-block meter-range-box ${state.picker === "meter-from" ? "open" : ""}">
+              <button class="pick-head meter-range-btn" type="button" data-pick="meter-from">
+                <span class="meter-range-pre">с</span>
+                <span class="val" id="val-meter-from">${meterWin.fromDay}</span>
+              </button>
+              <div class="pick-body">
+                <div class="wheels wheels-compact">
+                  ${wheel(meterFromDays, meterFromIdx, "meter-from")}
+                </div>
+                <div class="pick-hint">листайте · тап по окну свернёт</div>
+              </div>
+            </div>
+            <div class="pick-block meter-range-box ${state.picker === "meter-to" ? "open" : ""}">
+              <button class="pick-head meter-range-btn" type="button" data-pick="meter-to">
+                <span class="meter-range-pre">по</span>
+                <span class="val" id="val-meter-to">${meterWin.toDay}</span>
+              </button>
+              <div class="pick-body">
+                <div class="wheels wheels-compact">
+                  ${wheel(meterToDays, meterToIdx, "meter-to")}
+                </div>
+                <div class="pick-hint">листайте · тап по окну свернёт</div>
+              </div>
+            </div>
+          </div>
+        </div>` : `
         <div class="pick-block ${state.picker === "date" ? "open" : ""}">
           <button class="pick-head" type="button" data-pick="date">
-            <span class="lab">${isMeter ? "Когда сделать" : "Когда"}</span>
-            <span class="val" id="val-date">${isMeter
-    ? `с ${meterWin.fromDay} по ${meterWin.toDay} · ${date.day} ${MONTHS_SHORT[date.month]}`
-    : (item.date ? `${date.day} ${MONTHS_SHORT[date.month]}` : "без даты")}</span>
+            <span class="lab">Когда</span>
+            <span class="val" id="val-date">${item.date ? `${date.day} ${MONTHS_SHORT[date.month]}` : "без даты"}</span>
             <span class="pick-ico">${ICONS.calendar}</span>
           </button>
           <div class="pick-body">
-            <div class="wheels ${isMeter ? "wheels-compact" : ""}">
-              ${isMeter
-    ? wheel(meterDays, meterDayIdx, "day")
-    : `${wheel(days, date.day - 1, "day")}${wheel(MONTHS_FULL, date.month, "month")}`}
+            <div class="wheels">
+              ${wheel(days, date.day - 1, "day")}${wheel(MONTHS_FULL, date.month, "month")}
             </div>
             <div class="pick-hint">листайте · тап по иконке свернёт</div>
           </div>
-        </div>
+        </div>`}
         ${isBday ? `
         <div class="detail-year-row">
           <label class="field detail-plate">
@@ -6144,7 +6602,7 @@ function renderDetail() {
         `}
 
         ${slimCard ? "" : `
-        ${(isBday || show?.who) ? detailSwipeRow(`
+        ${show?.who ? detailSwipeRow(`
         <label class="field">
           <span>Участник</span>
           <input id="f-who" value="${esc(item.who || "")}" placeholder="Иван Петров" />
@@ -6243,9 +6701,34 @@ function applyWheel(key, idx) {
   if (!item.date) item.date = todayParts();
   if (!item.time) item.time = { hour: 9, minute: 0 };
 
-  if (key === "day") {
-    if (isMeterItem(item)) item.date = { ...item.date, day: idx + 15 };
-    else item.date = { ...item.date, day: idx + 1 };
+  if (key === "day") item.date = { ...item.date, day: idx + 1 };
+  if (key === "meter-from") {
+    if (!item.monthWindow) item.monthWindow = meterMonthWindow(item);
+    const fromDay = idx + 1;
+    let toDay = item.monthWindow.toDay;
+    if (toDay < fromDay) toDay = fromDay;
+    item.monthWindow = { fromDay, toDay };
+    if (!item.date) item.date = todayParts();
+    item.date = { ...item.date, day: fromDay };
+    const fromEl = document.getElementById("val-meter-from");
+    const toEl = document.getElementById("val-meter-to");
+    if (fromEl) fromEl.textContent = String(fromDay);
+    if (toEl) toEl.textContent = String(toDay);
+    scheduleDetailAutoSave();
+    return;
+  }
+  if (key === "meter-to") {
+    if (!item.monthWindow) item.monthWindow = meterMonthWindow(item);
+    const toDay = idx + 1;
+    let fromDay = item.monthWindow.fromDay;
+    if (fromDay > toDay) fromDay = toDay;
+    item.monthWindow = { fromDay, toDay };
+    const fromEl = document.getElementById("val-meter-from");
+    const toEl = document.getElementById("val-meter-to");
+    if (fromEl) fromEl.textContent = String(fromDay);
+    if (toEl) toEl.textContent = String(toDay);
+    scheduleDetailAutoSave();
+    return;
   }
   if (key === "month") {
     const now = todayParts();
@@ -6262,9 +6745,7 @@ function applyWheel(key, idx) {
   const tEl = document.getElementById("val-time");
   const rEl = document.getElementById("val-remind");
   if (dEl && item.date) {
-    dEl.textContent = isMeterItem(item)
-      ? `с ${meterMonthWindow(item).fromDay} по ${meterMonthWindow(item).toDay} · ${item.date.day} ${MONTHS_SHORT[item.date.month]}`
-      : `${item.date.day} ${MONTHS_SHORT[item.date.month]}`;
+    dEl.textContent = `${item.date.day} ${MONTHS_SHORT[item.date.month]}`;
   }
   if (tEl) tEl.textContent = fmtTime(item);
   if (rEl) rEl.textContent = fmtRemind(item);
@@ -6725,25 +7206,14 @@ function renderSettings() {
     }
   });
 
-  document.getElementById("settings-restore")?.addEventListener("click", async (event) => {
-    const keyInput = document.getElementById("settings-restore-key");
-    const errorEl = viewEl.querySelector("[data-settings-restore-error]");
-    const key = keyInput?.value.trim();
-    if (!key) {
-      errorEl.textContent = "Вставьте ключ переноса";
-      return;
-    }
-    event.currentTarget.disabled = true;
-    errorEl.textContent = "";
-    try {
-      await restoreByTransferKey(key);
+  mountTransferRestoreForm(viewEl, {
+    inputSelector: "#settings-restore-key",
+    buttonId: "settings-restore",
+    errorSelector: "[data-settings-restore-error]",
+    onSuccess: async () => {
       finishTransferKeyRestore();
       toast("Записи восстановлены");
-    } catch (err) {
-      errorEl.textContent = err.message;
-    } finally {
-      event.currentTarget.disabled = false;
-    }
+    },
   });
 }
 
@@ -8317,7 +8787,7 @@ function buildDetailPatch(item) {
   const body = {
     title,
     place: isCare || isHealth || isMeterItem(item) ? "" : (placeEl?.value || ""),
-    who: isCare || isHealth || isMeterItem(item) ? "" : (whoEl?.value || ""),
+    who: isCare || isHealth || isMeterItem(item) || item.type === "bday" ? "" : (whoEl?.value || ""),
     phone: isCare || isHealth || isMeterItem(item) ? "" : (phoneEl?.value || ""),
     carePart: isCare ? carePartOf(item) : item.carePart,
     healthPart: isHealth ? healthPartOf(item) : item.healthPart,
@@ -9721,6 +10191,13 @@ document.addEventListener("click", async event => {
         return toast(err.message);
       }
     }
+    if (state.screen === "sportDay") {
+      if (blockDemoMutation("sport")) return;
+      const wd = state.sportDayWeekday;
+      if (!Number.isInteger(wd)) return;
+      state.sportExerciseDraft = { weekday: wd, index: null, exercise: defaultSportExercise() };
+      return renderSportDay();
+    }
     if (state.screen !== "daily") return;
     const shelfId = state.shelf;
     if (shelfId === "care") {
@@ -9744,7 +10221,20 @@ document.addEventListener("click", async event => {
       };
       return renderHealthShelf();
     }
-    if (!["sport", "bday", "meters", "bills"].includes(shelfId)) return;
+    if (shelfId === "sport") {
+      if (blockDemoMutation("sport")) return;
+      const wd = state.screen === "sportDay" && Number.isInteger(state.sportDayWeekday)
+        ? state.sportDayWeekday
+        : new Date().getDay();
+      state.shelf = "sport";
+      if (state.screen !== "sportDay") {
+        state.sportDayWeekday = wd;
+        state.screen = "sportDay";
+      }
+      state.sportExerciseDraft = { weekday: wd, index: null, exercise: defaultSportExercise() };
+      return renderSportDay();
+    }
+    if (!["bday", "meters", "bills"].includes(shelfId)) return;
     try {
       const id = await addManualShelfItem(shelfId);
       if (!id) return toast("Не удалось добавить");
@@ -9822,6 +10312,155 @@ document.addEventListener("click", async event => {
       return toast(err.message);
     }
   }
+
+  const sportDayBtn = event.target.closest("[data-sport-day]");
+  if (sportDayBtn) {
+    if (blockDemoMutation("sport")) return;
+    const weekday = Number(sportDayBtn.dataset.sportDay);
+    if (!Number.isFinite(weekday) || weekday < 0 || weekday > 6) return;
+    return go("sportDay", { weekday });
+  }
+
+  if (event.target.closest("#sport-notify-open")) {
+    if (blockDemoMutation("sport")) return;
+    state.sportNotifyOpen = true;
+    state.sportNotifyDraft = sportSettingsNotify().map(s => ({ ...s }));
+    state.sportNotifyPickDay = null;
+    return renderSportShelf(true);
+  }
+
+  if (event.target.closest("#sport-notify-cancel")) {
+    state.sportNotifyOpen = false;
+    state.sportNotifyDraft = null;
+    state.sportNotifyPickDay = null;
+    return renderSportShelf(true);
+  }
+
+  if (event.target.closest("#sport-notify-done")) {
+    if (blockDemoMutation("sport")) return;
+    const draft = state.sportNotifyDraft;
+    if (!draft) return;
+    try {
+      const sportNotify = normalizeSportNotify(draft);
+      const sportPlan = sportPlanSyncedWithNotify(sportSettingsPlan(), sportNotify);
+      await saveSportSettings({ sportNotify, sportPlan });
+      state.sportNotifyOpen = false;
+      state.sportNotifyDraft = null;
+      state.sportNotifyPickDay = null;
+      toast("Напоминания сохранены");
+      return renderSportShelf(true);
+    } catch (err) {
+      return toast(err.message);
+    }
+  }
+
+  const sportNotifyPick = event.target.closest("[data-sport-notify-pick]");
+  if (sportNotifyPick) {
+    if (blockDemoMutation("sport")) return;
+    const day = Number(sportNotifyPick.dataset.sportNotifyPick);
+    const draft = state.sportNotifyDraft;
+    if (!draft || !Number.isFinite(day)) return;
+    if (!draft[day]?.enabled) {
+      draft[day] = { ...defaultSportNotify()[day], ...draft[day], enabled: true };
+    }
+    state.sportNotifyPickDay = day;
+    return renderSportShelf(true);
+  }
+
+  if (event.target.closest("#sport-notify-time-cancel")) {
+    state.sportNotifyPickDay = null;
+    return renderSportShelf(true);
+  }
+
+  if (event.target.closest("#sport-notify-time-done")) {
+    state.sportNotifyPickDay = null;
+    return renderSportShelf(true);
+  }
+
+  const sportNotifyToggle = event.target.closest("[data-sport-notify-toggle]");
+  if (sportNotifyToggle) {
+    if (blockDemoMutation("sport")) return;
+    const day = Number(sportNotifyToggle.dataset.sportNotifyToggle);
+    const draft = state.sportNotifyDraft;
+    if (!draft || !Number.isFinite(day)) return;
+    draft[day] = { ...defaultSportNotify()[day], ...draft[day], enabled: !draft[day]?.enabled };
+    return renderSportShelf(true);
+  }
+
+  if (event.target.closest("#sport-ex-muscle-open")) {
+    state.sportMusclePickOpen = true;
+    return renderSportDay();
+  }
+
+  const sportMusclePick = event.target.closest("[data-sport-muscle-pick]");
+  if (sportMusclePick) {
+    const draft = state.sportExerciseDraft;
+    if (!draft) return;
+    const val = sportMusclePick.dataset.sportMusclePick ?? "";
+    draft.exercise = { ...(draft.exercise || defaultSportExercise()), muscleGroup: val };
+    state.sportMusclePickOpen = false;
+    return renderSportDay();
+  }
+
+  if (event.target.closest("#sport-ex-cancel")) {
+    state.sportExerciseDraft = null;
+    state.sportMusclePickOpen = false;
+    return renderSportDay();
+  }
+
+  if (event.target.closest("#sport-ex-delete")) {
+    if (blockDemoMutation("sport")) return;
+    const draft = state.sportExerciseDraft;
+    if (!draft || draft.index == null) return;
+    try {
+      await deleteSportExercise(draft.weekday, draft.index);
+      state.sportExerciseDraft = null;
+      state.sportMusclePickOpen = false;
+      toast("Удалено");
+      return renderSportDay();
+    } catch (err) {
+      return toast(err.message);
+    }
+  }
+
+  if (event.target.closest("#sport-ex-save")) {
+    if (blockDemoMutation("sport")) return;
+    const draft = state.sportExerciseDraft;
+    if (!draft) return;
+    const name = document.getElementById("sport-ex-name")?.value?.trim();
+    if (!name) return toast("Введите название упражнения");
+    const exercise = {
+      name,
+      muscleGroup: draft.exercise?.muscleGroup?.trim() || "",
+      sets: Number(document.getElementById("sport-ex-sets")?.value) || 3,
+      reps: document.getElementById("sport-ex-reps")?.value?.trim() || "10",
+      weight: document.getElementById("sport-ex-weight")?.value?.trim() || "",
+      rest: document.getElementById("sport-ex-rest")?.value?.trim() || "",
+      notes: document.getElementById("sport-ex-notes")?.value?.trim() || "",
+    };
+    try {
+      await saveSportExercise(draft.weekday, draft.index, exercise);
+      state.sportExerciseDraft = null;
+      state.sportMusclePickOpen = false;
+      toast("Сохранено");
+      return renderSportDay();
+    } catch (err) {
+      return toast(err.message);
+    }
+  }
+
+  const sportExEdit = event.target.closest("[data-sport-exercise-edit]");
+  if (sportExEdit) {
+    if (blockDemoMutation("sport")) return;
+    const weekday = state.sportDayWeekday;
+    const index = Number(sportExEdit.dataset.sportExerciseEdit);
+    const day = sportDayPlan(weekday);
+    const exercise = day.exercises?.[index];
+    if (!exercise) return;
+    state.sportExerciseDraft = { weekday, index, exercise: { ...exercise } };
+    return renderSportDay();
+  }
+
 
   const healthShelfDay = event.target.closest("[data-health-shelf-day]");
   if (healthShelfDay) {
@@ -9996,19 +10635,23 @@ document.addEventListener("click", async event => {
   if (event.target.closest("#meters-done")) {
     const item = currentItem();
     if (!item || !isMeterItem(item)) return;
-    const d = item.date || todayParts();
-    let month = d.month + 1;
-    let year = d.year;
-    if (month > 11) { month = 0; year += 1; }
     try {
-      absorb(await api(`/items/${item.id}`, {
-        method: "PATCH",
-        body: {
-          date: { year, month, day: meterMonthWindow(item).fromDay },
-        },
-      }));
+      await markMeterReadingsDone(item);
       toast("Показания внесены — напомню в следующем месяце");
       return go("daily", { shelf: "meters" });
+    } catch (err) { toast(err.message); }
+    return;
+  }
+
+  const metersDoneBtn = event.target.closest("[data-meters-done]");
+  if (metersDoneBtn) {
+    const id = metersDoneBtn.dataset.metersDone;
+    const item = state.items.find(i => i.id === id);
+    if (!item || !isMeterItem(item)) return;
+    try {
+      await markMeterReadingsDone(item);
+      toast("Показания внесены — напомню в следующем месяце");
+      return renderDaily();
     } catch (err) { toast(err.message); }
     return;
   }
@@ -10356,6 +10999,7 @@ setInterval(() => {
   // На «Наборах» времени нет, а перерисовка сбросила бы выбор глазами — их не трогаем.
   if (state.screen === "shelves") renderShelves();
   else if (state.screen === "daily") renderDaily();
+  else if (state.screen === "sportDay") renderSportDay();
   else if (state.screen === "lists") refreshState();
   pushWidget();
   // В браузере ответ поддержки приносит пуш, в приложении для телефона его нет — спрашиваем сами.
@@ -10411,6 +11055,7 @@ function applyBootRoute(params) {
   else if (goTo === "archive") { state.screen = "shelves"; state.shelf = "archive"; }
   else if (goTo === "lists") state.screen = "lists";
   else if (goTo === "support") state.screen = "support";
+  else if (goTo === "sport") { state.screen = "daily"; state.shelf = "sport"; }
   else if (params.get("item")) {
     // Старые ссылки из уведомлений тоже ведут на полку, а не в редактирование.
     openFromNotification(params.get("item"));
@@ -10602,6 +11247,7 @@ function attachDevice() {
     NATIVE.onLiveNotice?.(payload => showLiveNotice(payload));
     // Нажали на ответ поддержки в шторке — открываем переписку, а не главный экран.
     NATIVE.onSupportOpen?.(() => go("support"));
+    NATIVE.onSportOpen?.(() => go("daily", { shelf: "sport" }));
     NATIVE.onJoinCode?.(code => {
       state.listJoinDraft = String(code || "").trim().toUpperCase();
       state.listInviteDraft = { code: state.listJoinDraft, step: "nickname" };

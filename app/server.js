@@ -21,6 +21,7 @@ import {
   ellipsisPatch,
 } from "./lib/dialog.js";
 import { safeZone, zonedParts, itemUtc, remindUtc, addDays, addMonths, weekdayOf, compareDates, zonedToUtc } from "./lib/time.js";
+import { normalizeSportPlan, normalizeSportNotify, sportDayHasWorkout, defaultSportPlan } from "./public/sport-plan.js";
 import { initPush, publicKey, addSubscription, removeSubscription, sendTo } from "./lib/push.js";
 import { initFcm, addFcmToken, removeFcmToken, sendFcmTo, fcmReady } from "./lib/fcm.js";
 import { templateById, templateDrafts, templatesPublic } from "./lib/templates.js";
@@ -499,6 +500,8 @@ function makeItem(ownerId, draft, settings = {}) {
     melody: String(draft.melody || "default").slice(0, 40),
     yearly: Boolean(draft.yearly),
     birthYear: Number.isFinite(draft.birthYear) ? Math.max(1900, Math.min(Number(draft.birthYear), 2100)) : null,
+    // Сумма платежа: разбор речи достаёт её из фразы, карточка даёт исправить.
+    amount: Number.isFinite(draft.amount) ? Math.max(0, Math.min(Number(draft.amount), 9999999)) : null,
     monthWindow: draft.monthWindow && Number.isFinite(draft.monthWindow.fromDay) && Number.isFinite(draft.monthWindow.toDay)
       ? { fromDay: Math.max(1, Math.min(28, Number(draft.monthWindow.fromDay))), toDay: Math.max(1, Math.min(31, Number(draft.monthWindow.toDay))) }
       : null,
@@ -1897,6 +1900,7 @@ route("POST", /^\/api\/items$/, async (ctx) => {
     remind: ctx.body.remind,
     alarm: ctx.body.alarm,
     shelf: ctx.body.shelf,
+    amount: ctx.body.amount,
     // Так же, как при голосовом вводе: время спрашиваем только у встреч
     // и будильников, где без часа запись бессмысленна. Дело и покупка
     // прекрасно живут без времени.
@@ -1975,6 +1979,9 @@ route("PATCH", /^\/api\/items\/([\w-]+)$/, async (ctx) => {
   if (typeof b.yearly === "boolean") item.yearly = b.yearly;
   if ("birthYear" in b) {
     item.birthYear = Number.isFinite(b.birthYear) ? Math.max(1900, Math.min(Number(b.birthYear), 2100)) : null;
+  }
+  if ("amount" in b) {
+    item.amount = Number.isFinite(b.amount) ? Math.max(0, Math.min(Number(b.amount), 9999999)) : null;
   }
   if ("monthWindow" in b && b.monthWindow && typeof b.monthWindow === "object") {
     item.monthWindow = {
@@ -2568,12 +2575,19 @@ route("POST", /^\/api\/settings$/, async (ctx) => {
   if (Number.isFinite(b.morningHour)) s.morningHour = Math.max(4, Math.min(Math.round(Number(b.morningHour)), 12));
   if (typeof b.alarmSound === "string") s.alarmSound = alarmSoundId(b.alarmSound);
   if (typeof b.notifySound === "string") s.notifySound = notifySoundId(b.notifySound);
-  for (const key of ["alarmMeetings", "eveningReview", "keepAudio", "morningBrief", "careRoutineV1", "careRoutineV2", "healthRoutineV1", "healthRoutineV2", "healthRoutineV3", "metersPresetV1"]) {
+  for (const key of ["alarmMeetings", "eveningReview", "keepAudio", "morningBrief", "careRoutineV1", "careRoutineV2", "healthRoutineV1", "healthRoutineV2", "healthRoutineV3", "metersPresetV1", "sportPlanV1"]) {
     if (typeof b[key] === "boolean") s[key] = b[key];
   }
   if (Array.isArray(b.healthDaysOff)) {
     s.healthDaysOff = [...new Set(b.healthDaysOff.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))];
   }
+  if (b.sportPlan && typeof b.sportPlan === "object") {
+    s.sportPlan = normalizeSportPlan(b.sportPlan);
+  }
+  if (Array.isArray(b.sportNotify)) {
+    s.sportNotify = normalizeSportNotify(b.sportNotify);
+  }
+  if (typeof b.sportPlanV1 === "boolean") s.sportPlanV1 = b.sportPlanV1;
   // «Наборы» записей не хранят, но в списке закладок ведут себя как все: их прячут и переставляют.
   const hideable = [...BUILTIN_SHELF_IDS.filter(id => id !== "today"), ...TAB_ONLY_SHELF_IDS];
   if (Array.isArray(b.hiddenShelves)) {
@@ -3392,6 +3406,29 @@ async function tick() {
     }
 
     const settings = user.settings || {};
+
+    // Спорт: простой пуш «сегодня тренировка в HH:MM» по расписанию дней недели.
+    {
+      const parts = zonedParts(now, tz);
+      const wd = weekdayOf({ year: parts.year, month: parts.month, day: parts.day });
+      const sportNotify = normalizeSportNotify(settings.sportNotify);
+      const sportPlan = normalizeSportPlan(settings.sportPlan || defaultSportPlan());
+      const slot = sportNotify[wd];
+      const dayPlan = sportPlan.days[wd];
+      const remindKey = `${parts.year}-${parts.month}-${parts.day}`;
+      if (slot?.enabled && sportDayHasWorkout(dayPlan)
+          && parts.hour === slot.hour && parts.minute === slot.minute
+          && settings.sportRemindedKey !== remindKey) {
+        settings.sportRemindedKey = remindKey;
+        dirty = true;
+        await sendTo(user.id, {
+          title: "Тренировка",
+          body: `сегодня тренировка в ${hhmm({ hour: slot.hour, minute: slot.minute })}`,
+          tag: `sport-${remindKey}`,
+          url: "/?go=sport",
+        });
+      }
+    }
 
     // Утренний брифинг: один пуш с планом дня вместо десятка отдельных напоминаний.
     if (settings.morningBrief) {

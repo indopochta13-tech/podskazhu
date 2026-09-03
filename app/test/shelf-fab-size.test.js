@@ -33,6 +33,10 @@ check("mountFabSoul берёт размер кнопки",
   app.includes("shelfMicCanvasPixels") && app.includes("getBoundingClientRect"),
   "нет синхронизации canvas с кнопкой");
 
+check("mic hidden on manual-only shelves",
+  /NO_MIC_SHELF_IDS/.test(app) && /function shelfNeedsMicFab[\s\S]{0,500}NO_MIC_SHELF_IDS\.has\(state\.shelf\)/.test(app),
+  "ожидали проверку NO_MIC_SHELF_IDS в shelfNeedsMicFab");
+
 check("+ выше микрофона в DOM",
   /shelfFabStack[\s\S]{0,400}id="shelf-add"[\s\S]{0,400}id="shelf-mic"/.test(app),
   "порядок кнопок в стеке");
