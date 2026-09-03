@@ -23,6 +23,8 @@ console.log("Meters seed API\n");
 check("route /api/meters/seed", /METERS_PRESET_KEYS/.test(serverJs));
 check("METERS_PRESET titles", /title: "Свет"/.test(serverJs) && /title: "Газ"/.test(serverJs));
 check("cancels junk on meters shelf", /item\.shelf === "meters"/.test(serverJs) && /cancelled \+= 1/.test(serverJs));
+check("cancels junk on bills shelf", /item\.shelf === "bills" && pokazaniya/.test(serverJs));
+check("dedupes preset rows", /presetRows/.test(serverJs));
 check("monthWindow 15-26", /fromDay: 15, toDay: 26/.test(serverJs));
 check("monthly repeat", /kind: "monthly"/.test(serverJs));
 check("metersPresetV2 flag", /metersPresetV2/.test(serverJs));

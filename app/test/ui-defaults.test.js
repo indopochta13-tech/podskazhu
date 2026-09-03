@@ -27,8 +27,10 @@ check("meters preset titles", /METERS_PRESET/.test(appJs) && /Свет/.test(app
 check("perm dot hint removed", !/perm-dot-hint/.test(appJs));
 check("alarm repeat carousel", /repeat-carousel/.test(appJs));
 check("meters server seed", /METERS_PRESET_KEYS/.test(fs.readFileSync(path.join(APP_DIR, "server.js"), "utf8")));
-check("shell 154", /SW_VERSION = 154/.test(appJs));
+check("shell 155", /SW_VERSION = 155/.test(appJs));
 check("meters preset via seed", /\/meters\/seed/.test(appJs));
+check("meters seed only on meters shelf", /state\.shelf !== "meters"/.test(appJs));
+check("no boot meters seed", !/async function loadAppState[\s\S]*?scheduleMetersPreset/.test(appJs));
 check("bday repeat hidden", /isHealth \|\| isMeter \|\| isBday \? "" :/.test(appJs));
 
 if (failed) {

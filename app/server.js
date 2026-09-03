@@ -543,7 +543,7 @@ function makeItem(ownerId, draft, settings = {}) {
     item.type = "custom";
     item.shelf = preferred.id;
   } else {
-    item.shelf = shelfFor(item, settings);
+    item.shelf = shelfFor({ ...item, shelf: draft.shelf }, settings);
   }
   // Настройки закладки: напоминание / пуш / будильник / отложить — если голос сам не задал.
   if (item.type !== "alarm") {
@@ -2206,37 +2206,49 @@ route("POST", /^\/api\/meters\/seed$/, async (ctx) => {
   const baseDate = { year: nowParts.year, month: nowParts.month, day: 15 };
   const monthWindow = { fromDay: 15, toDay: 26 };
   const prefs = shelfPrefsFor("meters", settings);
-  const found = new Map();
+  const presetRows = [];
+  let cancelled = 0;
 
   for (const item of activeItems(ctx.user.id)) {
     if (item.cancelled || item.archived || item.done) continue;
     const key = metersPresetKey(item.title);
-    if (!key || found.has(key)) continue;
-    found.set(key, item);
+    const title = String(item.title || "").trim().toLowerCase();
+    const pokazaniya = title === "показания" || title.startsWith("показан");
+    if (key) {
+      presetRows.push({ item, key });
+      continue;
+    }
+    if (item.shelf === "meters" || (item.shelf === "bills" && pokazaniya)) {
+      item.cancelled = true;
+      item.updatedAt = Date.now();
+      cancelled += 1;
+    }
   }
 
-  let cancelled = 0;
-  for (const item of activeItems(ctx.user.id)) {
-    if (item.cancelled || item.archived || item.done) continue;
-    const key = metersPresetKey(item.title);
-    if (item.shelf === "meters") {
-      if (!key) {
-        item.cancelled = true;
-        item.updatedAt = Date.now();
-        cancelled += 1;
-        continue;
-      }
-      const keeper = found.get(key);
-      if (keeper && keeper.id !== item.id) {
-        item.cancelled = true;
-        item.updatedAt = Date.now();
-        cancelled += 1;
-      }
+  const found = new Map();
+  for (const { item, key } of presetRows) {
+    const prev = found.get(key);
+    if (!prev) {
+      found.set(key, item);
+      continue;
+    }
+    const keep = prev.shelf === "meters" && item.shelf !== "meters" ? prev
+      : item.shelf === "meters" && prev.shelf !== "meters" ? item
+        : (prev.createdAt || 0) <= (item.createdAt || 0) ? prev : item;
+    found.set(key, keep);
+  }
+
+  for (const { item, key } of presetRows) {
+    const keeper = found.get(key);
+    if (keeper && keeper.id !== item.id) {
+      item.cancelled = true;
+      item.updatedAt = Date.now();
+      cancelled += 1;
     }
   }
 
   for (const item of found.values()) {
-    if (item.shelf === "meters" && item.cancelled) continue;
+    if (item.cancelled) continue;
     item.shelf = "meters";
     item.type = "bills";
     item.repeat = normalizeRepeat({ kind: "monthly" });
@@ -2252,7 +2264,7 @@ route("POST", /^\/api\/meters\/seed$/, async (ctx) => {
   for (const row of METERS_PRESET) {
     const key = row.title.toLowerCase();
     if (found.has(key) && !found.get(key).cancelled) continue;
-    created.push(makeItem(ctx.user.id, {
+    const item = makeItem(ctx.user.id, {
       type: "bills",
       shelf: "meters",
       title: row.title,
@@ -2265,8 +2277,11 @@ route("POST", /^\/api\/meters\/seed$/, async (ctx) => {
       monthWindow,
       needsTime: false,
       source: "meters-preset-v1",
-    }, settings));
-    found.set(key, created[created.length - 1]);
+    }, settings);
+    item.shelf = "meters";
+    item.updatedAt = Date.now();
+    created.push(item);
+    found.set(key, item);
   }
 
   settings.metersPresetV1 = true;

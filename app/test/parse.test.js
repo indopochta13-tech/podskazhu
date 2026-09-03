@@ -1040,6 +1040,8 @@ console.log("\nВыбор цели cancel/move:");
   check("classifyKind: заметка сильнее покупки", classifyKind("запиши заметку купить цветы").type === "note");
   check("classifyKind: продукты без глагола", classifyKind("молоко и хлеб").type === "buy");
   check("shelfFor не залипает tasks на note", shelfFor({ type: "note", shelf: "tasks", title: "Приготовить" }) === "notes");
+  check("shelfFor: счётчики на meters при type bills", shelfFor({ type: "bills", shelf: "meters", title: "Свет" }) === "meters");
+  check("shelfFor: платежи на bills", shelfFor({ type: "bills", shelf: "bills", title: "Кварплата" }) === "bills");
 
   console.log("\nВолна Алисы (лексика + время):");
   const aliceCases = [

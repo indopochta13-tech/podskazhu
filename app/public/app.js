@@ -281,7 +281,6 @@ async function onProActivated() {
     state.proShelfDemoModal = null;
     const data = await api("/start", { method: "POST", body: { tz: state.user?.settings?.tz } });
     absorb(data);
-    scheduleMetersPreset();
     if (state.screen === "daily" || state.screen === "lists") render();
     else if (state.screen === "settings") renderSettings();
   } catch { /* ignore */ }
@@ -933,7 +932,7 @@ async function ensureMetersPreset() {
 }
 
 function scheduleMetersPreset() {
-  if (!state.user || metersSeedBusy || proShelfGated("meters")) return;
+  if (!state.user || metersSeedBusy || proShelfGated("meters") || state.shelf !== "meters") return;
   ensureMetersPreset().then(changed => {
     if (changed && state.screen === "daily" && state.shelf === "meters") renderDaily();
   });
@@ -1267,9 +1266,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.76";
+const APP_VERSION = "1.9.77";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 154;
+const SW_VERSION = 155;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -10437,7 +10436,6 @@ async function loadAppState(params, { billingReturn = false } = {}) {
     state.listInviteDraft = { code: state.listJoinDraft, step: "nickname" };
     state.listJoinDraft = "";
   }
-  scheduleMetersPreset();
 }
 
 /**

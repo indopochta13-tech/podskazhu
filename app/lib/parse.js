@@ -2908,6 +2908,8 @@ export function shelfFor(item, settings = {}) {
   if (item.type === "buy") return "buy";
   if (item.type === "sport") return "sport";
   if (item.type === "care") return "care";
+  // Счётчики: type bills, полка meters — явный shelf важнее типа.
+  if (item.shelf === "meters") return "meters";
   if (item.type === "bills") return "bills";
   if (item.type === "meters") return "meters";
   if (item.type === "health") return "health";
