@@ -21,14 +21,14 @@
     var modes = ["light", "dark", "system"];
     var p = localStorage.getItem("vc.palette");
     var m = localStorage.getItem("vc.themeMode");
-    if (palettes.indexOf(p) < 0) p = "stone";
+    if (palettes.indexOf(p) < 0) p = "smoke";
     if (modes.indexOf(m) < 0) m = "system";
     var dark = m === "dark" || (m === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     document.documentElement.dataset.palette = p;
   } catch (e) {
     document.documentElement.dataset.theme = "light";
-    document.documentElement.dataset.palette = "stone";
+    document.documentElement.dataset.palette = "smoke";
   }
 })();
 </script>
@@ -36,7 +36,7 @@
 (function () {
   // SW кэширует оболочку; без перезагрузок и баннеров «обновите интерфейс».
   // SWV и app.js?v= ниже — одно число; при смене поднимайте и SW_VERSION в sw.js / app.js.
-  window.__VC_SHELL_V = 151;
+  window.__VC_SHELL_V = 152;
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.register("/sw.js?v=" + window.__VC_SHELL_V).catch(function () {});
 })();
@@ -85,6 +85,6 @@
     <main class="stage" id="stage"></main>
   </div>
 </template>
-<script src="/app.js?v=151" type="module"></script>
+<script src="/app.js?v=152" type="module"></script>
 </body>
 </html>

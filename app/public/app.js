@@ -584,6 +584,7 @@ function defaultShelfPref(shelfId) {
   }
   if (shelfId === "alarms") return { remind: 0, push: false, alarm: true, snooze: 1 };
   if (shelfId === "bills") return { remind: 1440, push: true, alarm: false, snooze: 60 };
+  if (shelfId === "meters") return { remind: 1440, push: true, alarm: false, snooze: 60 };
   if (shelfId === "health") return { remind: 0, push: true, alarm: false, snooze: 15 };
   if (shelfId === "care" || shelfId === "sport") return { remind: 0, push: true, alarm: false, snooze: 1 };
   return { remind: 0, push: true, alarm: false, snooze: 1 };
@@ -769,8 +770,10 @@ async function addManualShelfItem(shelfId, opts = {}) {
     shelf: "meters",
     title: "Показания",
     date: now,
-    remind: shelfPref("bills").remind,
+    time: { hour: 10, minute: 0 },
+    remind: shelfPref("meters").remind,
     repeat: { kind: "monthly" },
+    monthWindow: { fromDay: 15, toDay: 26 },
   } : {
     type: isCare ? "care" : isHealth ? "health" : "sport",
     shelf: isCare ? "care" : isHealth ? "health" : "sport",
@@ -811,8 +814,10 @@ async function addManualShelfItem(shelfId, opts = {}) {
       shelf: draft.shelf,
       title: draft.title,
       date: draft.date,
+      time: draft.time,
       remind: draft.remind,
       repeat: draft.repeat,
+      monthWindow: isMeters ? draft.monthWindow : undefined,
     } : {
       type: draft.type,
       shelf: draft.shelf,
@@ -903,6 +908,76 @@ async function ensureHealthRoutine() {
   }
 }
 
+const METERS_PRESET = [
+  { title: "Свет" },
+  { title: "Вода" },
+  { title: "Газ" },
+];
+
+let metersSeedBusy = false;
+async function ensureMetersPreset() {
+  if (!state.user || metersSeedBusy) return false;
+  if (state.user.settings?.metersPresetV1) return false;
+  if (shelfItems("meters").length) {
+    absorb(await api("/settings", { method: "POST", body: { metersPresetV1: true } }));
+    return false;
+  }
+  metersSeedBusy = true;
+  try {
+    const now = todayParts();
+    const baseDate = { year: now.year, month: now.month, day: 15 };
+    for (const row of METERS_PRESET) {
+      await api("/items", {
+        method: "POST",
+        body: {
+          type: "bills",
+          shelf: "meters",
+          title: row.title,
+          date: baseDate,
+          time: { hour: 10, minute: 0 },
+          remind: shelfPref("meters").remind,
+          push: true,
+          repeat: { kind: "monthly" },
+          monthWindow: { fromDay: 15, toDay: 26 },
+        },
+      });
+    }
+    absorb(await api("/settings", { method: "POST", body: { metersPresetV1: true } }));
+    absorb(await api(`/state?tz=${encodeURIComponent(tz())}`));
+    return true;
+  } catch (err) {
+    toast(err.message || "Не удалось настроить счётчики");
+    return false;
+  } finally {
+    metersSeedBusy = false;
+  }
+}
+
+function fullAgeFromBirthYear(year) {
+  const y = Number(year);
+  if (!Number.isFinite(y) || y < 1900 || y > new Date().getFullYear()) return "";
+  return String(new Date().getFullYear() - y);
+}
+
+function isMeterItem(item) {
+  return item?.shelf === "meters" || (item?.type === "bills" && item?.shelf === "meters");
+}
+
+function meterMonthWindow(item) {
+  const w = item?.monthWindow;
+  if (w && Number.isFinite(w.fromDay) && Number.isFinite(w.toDay)) return w;
+  return { fromDay: 15, toDay: 26 };
+}
+
+function detailSwipeRow(inner, delKey) {
+  return `
+    <div class="swipe detail-swipe" data-detail-swipe="${esc(delKey)}">
+      <button type="button" class="swipe-del" data-detail-del="${esc(delKey)}" tabindex="-1">Удалить</button>
+      <div class="swipe-front">${inner}</div>
+    </div>
+  `;
+}
+
 function labelOfShelf(id) {
   return visibleShelves().find(s => s.id === id)?.label
     || BUILTIN_SHELVES.find(s => s.id === id)?.label
@@ -915,6 +990,7 @@ const QUICK_TIMES = [
   { hour: 19, label: "вечером 19:00" },
 ];
 const REPEATS = [
+  { label: "ежегодно", value: { kind: "yearly" } },
   { label: "без повтора", value: null },
   { label: "каждый день", value: { kind: "daily" } },
   { label: "по будням", value: { kind: "weekdays" } },
@@ -926,8 +1002,12 @@ const REPEATS = [
 
 // Несколько дней недели («по вторникам и четвергам») в колесо не помещаются,
 // поэтому там показываем подпись с сервера, а колесо стоит на ближайшем по смыслу пункте.
-function repeatIndex(repeat) {
-  if (!repeat) return 0;
+function repeatIndex(repeat, item) {
+  if (item?.yearly || repeat?.kind === "yearly") {
+    const y = REPEATS.findIndex(r => r.value?.kind === "yearly");
+    if (y >= 0) return y;
+  }
+  if (!repeat) return REPEATS.findIndex(r => !r.value);
   const every = repeat.every > 1 ? repeat.every : 1;
   const exact = REPEATS.findIndex(r => r.value?.kind === repeat.kind && (r.value.every || 1) === every);
   if (exact >= 0) return exact;
@@ -935,7 +1015,8 @@ function repeatIndex(repeat) {
 }
 
 function repeatLabel(item) {
-  return item.repeatLabel || REPEATS[repeatIndex(item.repeat)].label;
+  if (item?.yearly && !item.repeatLabel) return "ежегодно";
+  return item.repeatLabel || REPEATS[repeatIndex(item.repeat, item)].label;
 }
 
 // Тот же токен дублируем в IndexedDB: из него читает service worker,
@@ -1076,9 +1157,9 @@ const store = {
   set homeWidget(v) { v ? localStorage.setItem("vc.homeWidget", "1") : localStorage.removeItem("vc.homeWidget"); },
   get palette() {
     const v = localStorage.getItem("vc.palette");
-    return PALETTE_IDS.includes(v) ? v : "stone";
+    return PALETTE_IDS.includes(v) ? v : "smoke";
   },
-  set palette(v) { localStorage.setItem("vc.palette", PALETTE_IDS.includes(v) ? v : "stone"); },
+  set palette(v) { localStorage.setItem("vc.palette", PALETTE_IDS.includes(v) ? v : "smoke"); },
   get themeMode() {
     const v = localStorage.getItem("vc.themeMode");
     return THEME_MODES.includes(v) ? v : "system";
@@ -1105,7 +1186,7 @@ function applyLook(palette = store.palette, mode = store.themeMode) {
     || (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   const root = document.documentElement;
   root.dataset.theme = dark ? "dark" : "light";
-  root.dataset.palette = PALETTE_IDS.includes(palette) ? palette : "stone";
+  root.dataset.palette = PALETTE_IDS.includes(palette) ? palette : "smoke";
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
     const bg = getComputedStyle(root).getPropertyValue("--bg").trim() || (dark ? "#1a1817" : "#f7f5f2");
@@ -1189,13 +1270,13 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.68";
+const APP_VERSION = "1.9.73";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 151;
+const SW_VERSION = 152;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
-  "f-who", "f-place", "f-phone", "f-note",
+  "f-who", "f-place", "f-phone", "f-note", "f-birth-year",
 ]);
 const SHELF_PREF_FIELD_IDS = new Set(["pref-remind-h", "pref-remind-m", "pref-snooze-m"]);
 
@@ -1238,6 +1319,7 @@ const state = {
   listManualDraft: "",
   listInviteOpen: false,
   listTabMenu: null,
+  listTabScrollId: null,
   listSentFlash: null,
   sharedWidgetPeek: null,
   listJoinDraft: "",
@@ -3346,7 +3428,7 @@ function widgetSnapshot() {
   return {
     builder: "WidgetSnapshotBuilder",
     builtAt: Date.now(),
-    palette: root.dataset.palette || "stone",
+    palette: root.dataset.palette || "smoke",
     theme: root.dataset.theme || "light",
     accent: getComputedStyle(root).getPropertyValue("--accent").trim(),
     accentSoft: getComputedStyle(root).getPropertyValue("--accent-soft").trim(),
@@ -4634,12 +4716,8 @@ function permissionsSectionHtml() {
       </div>
       <button type="button" class="btn ghost perm-issue-btn" data-perm-action="battery">${batteryIssue ? esc(batteryIssue.button) : "Открыть настройки"}</button>
     </div>` : "";
-  const dotHint = NATIVE && permissionsBadgeActive()
-    ? `<p class="lead perm-dot-hint">Точка на ⚙️ — нужно проверить разрешения ниже.</p>`
-    : "";
   return `
     <div class="group-label">Разрешения</div>
-    ${dotHint}
     ${micRow}
     ${notifRow}
     ${batteryRow}
@@ -5182,6 +5260,11 @@ function renderDaily() {
     </section>
   `;
   mountShelfMicFab();
+  if (state.shelf === "meters" && !metersSeedBusy) {
+    ensureMetersPreset().then(changed => {
+      if (changed && state.screen === "daily" && state.shelf === "meters") renderDaily();
+    });
+  }
 }
 
 function renderCalendarMain() {
@@ -5608,13 +5691,18 @@ function alarmCard(item) {
   const note = item.title && item.title !== "Будильник" ? item.title : "";
   const meta = [alarmRepeatLabel(item), note].filter(Boolean).join(" · ");
   return `
-    <button type="button" class="alarm-card ${on ? "" : "off"}" data-alarm-open="${item.id}">
-      <div class="alarm-card-main">
-        <div class="alarm-time">${time}</div>
-        <div class="alarm-meta">${esc(meta)}</div>
+    <div class="swipe alarm-swipe" data-item="${item.id}">
+      <button class="swipe-del" data-del="${item.id}" tabindex="-1" aria-hidden="true">Удалить</button>
+      <div class="swipe-front">
+        <button type="button" class="alarm-card ${on ? "" : "off"}" data-alarm-open="${item.id}">
+          <div class="alarm-card-main">
+            <div class="alarm-time">${time}</div>
+            <div class="alarm-meta">${esc(meta)}</div>
+          </div>
+          <span class="toggle ${on ? "on" : ""}" data-alarm-toggle="${item.id}"><i></i></span>
+        </button>
       </div>
-      <span class="toggle ${on ? "on" : ""}" data-alarm-toggle="${item.id}"><i></i></span>
-    </button>
+    </div>
   `;
 }
 
@@ -5798,6 +5886,7 @@ function itemCard(item, opts = {}) {
                 </div>
                 <span class="card-actions">
                   ${phoneLink ? `<a class="card-call" href="${esc(phoneLink)}" aria-label="Позвонить ${esc(phoneText)}" onclick="event.stopPropagation()">${icon("phone", 18)}</a>` : ""}
+                  ${isMeterItem(item) && state.shelf === "meters" ? `<span class="toggle ${item.push !== false ? "on" : ""}" data-meter-push="${item.id}"><i></i></span>` : ""}
                   <span class="card-shelf-ico ${pill}" title="${esc(pillLabel)}" aria-label="${esc(pillLabel)}">${shelfIconHtml(item.shelf || item.type)}</span>
                 </span>
               </div>
@@ -5882,6 +5971,7 @@ function detailShowFields(item) {
       place: Boolean(String(item.place || "").trim()),
       phone: Boolean(String(item.phone || "").trim()),
       note: Boolean(String(item.note || "").trim()),
+      extraPush: Number.isFinite(item.extraRemind),
     };
     state.detailShowItemId = item.id;
   }
@@ -5894,13 +5984,19 @@ function renderDetail() {
 
   const isCare = item.type === "care" || item.shelf === "care";
   const isHealth = isHealthItem(item);
+  const isBday = item.type === "bday";
+  const isMeter = isMeterItem(item);
   const slimCard = isCare || isHealth;
   const date = item.date || todayParts();
   const time = item.time || { hour: 9, minute: 0 };
   const days = Array.from({ length: 31 }, (_, i) => String(i + 1));
+  const meterDays = Array.from({ length: 12 }, (_, i) => String(i + 15));
+  const meterWin = meterMonthWindow(item);
+  const meterDayIdx = Math.max(0, Math.min(11, (date.day || meterWin.fromDay) - 15));
   const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
   const minuteIdx = Math.max(0, MINS.indexOf(String(time.minute).padStart(2, "0")));
   const remindIdx = Math.max(0, REMIND_OFFSETS.findIndex(r => r.v === item.remind));
+  const extraRemindIdx = Math.max(0, REMIND_OFFSETS.findIndex(r => r.v === item.extraRemind));
   const split = splitCareTitle(item.title);
   const show = slimCard ? null : detailShowFields(item);
   const whoText = String(item.who || "").trim();
@@ -5955,18 +6051,32 @@ function renderDetail() {
         </label>
         <div class="pick-block ${state.picker === "date" ? "open" : ""}">
           <button class="pick-head" type="button" data-pick="date">
-            <span class="lab">Когда</span>
-            <span class="val" id="val-date">${item.date ? `${date.day} ${MONTHS_SHORT[date.month]}` : "без даты"}</span>
+            <span class="lab">${isMeter ? "Когда сделать" : "Когда"}</span>
+            <span class="val" id="val-date">${isMeter
+    ? `с ${meterWin.fromDay} по ${meterWin.toDay} · ${date.day} ${MONTHS_SHORT[date.month]}`
+    : (item.date ? `${date.day} ${MONTHS_SHORT[date.month]}` : "без даты")}</span>
             <span class="pick-ico">${ICONS.calendar}</span>
           </button>
           <div class="pick-body">
-            <div class="wheels">
-              ${wheel(days, date.day - 1, "day")}
-              ${wheel(MONTHS_FULL, date.month, "month")}
+            <div class="wheels ${isMeter ? "wheels-compact" : ""}">
+              ${isMeter
+    ? wheel(meterDays, meterDayIdx, "day")
+    : `${wheel(days, date.day - 1, "day")}${wheel(MONTHS_FULL, date.month, "month")}`}
             </div>
             <div class="pick-hint">листайте · тап по иконке свернёт</div>
           </div>
         </div>
+        ${isBday ? `
+        <div class="detail-year-row">
+          <label class="field detail-plate">
+            <span>Год рождения</span>
+            <input id="f-birth-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" placeholder="1990" value="${item.birthYear || ""}" />
+          </label>
+          <div class="field detail-plate detail-age-plate">
+            <span>Полных лет</span>
+            <div class="detail-age-val" id="val-age">${esc(fullAgeFromBirthYear(item.birthYear) || "—")}</div>
+          </div>
+        </div>` : ""}
         `}
 
         ${slimCard ? "" : `
@@ -5999,7 +6109,22 @@ function renderDetail() {
           </div>
         </div>`}
 
-        ${isHealth ? "" : `
+        ${show?.extraPush ? `
+        <div class="pick-block ${state.picker === "extra-remind" ? "open" : ""}">
+          <button class="pick-head" type="button" data-pick="extra-remind">
+            <span class="lab">Доп. пуш</span>
+            <span class="val" id="val-extra-remind">${esc(fmtRemind({ remind: item.extraRemind }))}</span>
+            <span class="pick-ico">${ICONS.bell}</span>
+          </button>
+          <div class="pick-body">
+            <div class="wheels">
+              ${wheel(REMIND_OFFSETS.map(r => r.label), extraRemindIdx, "extra-remind")}
+            </div>
+            <div class="pick-hint">листайте · тап по иконке свернёт</div>
+          </div>
+        </div>` : ""}
+
+        ${isHealth || isMeter ? "" : `
         <div class="pick-block ${state.picker === "repeat" ? "open" : ""}">
           <button class="pick-head" type="button" data-pick="repeat">
             <span class="lab">Повтор</span>
@@ -6008,7 +6133,7 @@ function renderDetail() {
           </button>
           <div class="pick-body">
             <div class="wheels">
-              ${wheel(REPEATS.map(r => r.label), repeatIndex(item.repeat), "repeat")}
+              ${wheel(REPEATS.map(r => r.label), repeatIndex(item.repeat, item), "repeat")}
             </div>
             <div class="pick-hint">листайте · тап по иконке свернёт</div>
           </div>
@@ -6016,35 +6141,36 @@ function renderDetail() {
         `}
 
         ${slimCard ? "" : `
-        ${show?.who ? `
+        ${show?.who ? detailSwipeRow(`
         <label class="field">
           <span>Участник</span>
           <input id="f-who" value="${esc(item.who || "")}" placeholder="Иван Петров" />
-        </label>` : ""}
-        ${show?.place ? `
+        </label>`, "who") : ""}
+        ${show?.place ? detailSwipeRow(`
         <label class="field">
           <span>Место</span>
           <input id="f-place" value="${esc(item.place || "")}" placeholder="Ленина 15" />
-        </label>` : ""}
-        ${show?.phone ? `
+        </label>`, "place") : ""}
+        ${show?.phone ? detailSwipeRow(`
         <label class="field">
           <span>Телефон</span>
           <input id="f-phone" value="${esc(item.phone || "")}" placeholder="+7 900 123-45-67" inputmode="tel" />
-        </label>` : ""}
-        ${show?.note ? `
+        </label>`, "phone") : ""}
+        ${show?.note ? detailSwipeRow(`
         <label class="field">
           <span>Заметка</span>
           <textarea id="f-note" rows="4" maxlength="2000" placeholder="Подробности">${esc(item.note || "")}</textarea>
-        </label>` : ""}
-        ${(!show?.who || !show?.place || !show?.phone || !show?.note) ? `
+        </label>`, "note") : ""}
+        ${(!isMeter && (!show?.who || !show?.place || !show?.phone || !show?.note || !show?.extraPush)) ? `
         <div class="detail-add-row">
           ${!show?.who ? `<button type="button" class="chip ghost" data-detail-add="who">+ участник</button>` : ""}
           ${!show?.place ? `<button type="button" class="chip ghost" data-detail-add="place">+ место</button>` : ""}
           ${!show?.phone ? `<button type="button" class="chip ghost" data-detail-add="phone">+ телефон</button>` : ""}
           ${!show?.note ? `<button type="button" class="chip ghost" data-detail-add="note">+ заметка</button>` : ""}
+          ${!show?.extraPush ? `<button type="button" class="chip ghost" data-detail-add="extraPush">+ пуш</button>` : ""}
         </div>` : ""}
 
-        ${customShelves().length && item.type !== "note" ? `
+        ${!isMeter && customShelves().length && item.type !== "note" ? `
           <div class="field">
             <span>Своя полка</span>
             <div class="chip-row">
@@ -6056,9 +6182,10 @@ function renderDetail() {
         `}
 
         <div class="actions-col">
-          ${slimCard ? "" : `
+          ${isMeter ? `<button class="btn block" id="meters-done">показания внесены</button>` : ""}
+          ${slimCard || isMeter ? "" : `
           <button class="btn ghost block" id="detail-done">${item.done ? "Вернуть в работу" : "Отметить сделанным"}</button>`}
-          <button class="btn ghost block" id="detail-alarm">${item.alarm ? "Будильник включён" : "Поставить будильник"}</button>
+          ${slimCard || isMeter ? "" : `<button class="btn ghost block" id="detail-alarm">${item.alarm ? "Будильник включён" : "Поставить будильник"}</button>`}
           <button class="btn danger block" id="detail-cancel">Отменить запись</button>
         </div>
       </div>
@@ -6086,10 +6213,15 @@ function applyWheel(key, idx) {
   if (!item) return;
 
   if (key === "repeat") {
-    item.repeat = REPEATS[idx].value ? { ...REPEATS[idx].value } : null;
-    // Повтор без даты не имеет смысла — берём сегодня как точку отсчёта.
+    const val = REPEATS[idx].value;
+    if (val?.kind === "yearly") {
+      item.yearly = true;
+      item.repeat = { kind: "yearly" };
+    } else {
+      item.yearly = false;
+      item.repeat = val ? { ...val } : null;
+    }
     if (item.repeat && !item.date) item.date = todayParts();
-    // Подпись с сервера устарела, как только человек сам крутанул колесо.
     item.repeatLabel = "";
     const repEl = document.getElementById("val-repeat");
     if (repEl) repEl.textContent = REPEATS[idx].label;
@@ -6097,10 +6229,21 @@ function applyWheel(key, idx) {
     return;
   }
 
+  if (key === "extra-remind") {
+    item.extraRemind = REMIND_OFFSETS[idx].v;
+    const erEl = document.getElementById("val-extra-remind");
+    if (erEl) erEl.textContent = fmtRemind({ remind: item.extraRemind });
+    scheduleDetailAutoSave();
+    return;
+  }
+
   if (!item.date) item.date = todayParts();
   if (!item.time) item.time = { hour: 9, minute: 0 };
 
-  if (key === "day") item.date = { ...item.date, day: idx + 1 };
+  if (key === "day") {
+    if (isMeterItem(item)) item.date = { ...item.date, day: idx + 15 };
+    else item.date = { ...item.date, day: idx + 1 };
+  }
   if (key === "month") {
     const now = todayParts();
     let year = item.date.year || now.year;
@@ -6115,7 +6258,11 @@ function applyWheel(key, idx) {
   const dEl = document.getElementById("val-date");
   const tEl = document.getElementById("val-time");
   const rEl = document.getElementById("val-remind");
-  if (dEl) dEl.textContent = `${item.date.day} ${MONTHS_SHORT[item.date.month]}`;
+  if (dEl && item.date) {
+    dEl.textContent = isMeterItem(item)
+      ? `с ${meterMonthWindow(item).fromDay} по ${meterMonthWindow(item).toDay} · ${item.date.day} ${MONTHS_SHORT[item.date.month]}`
+      : `${item.date.day} ${MONTHS_SHORT[item.date.month]}`;
+  }
   if (tEl) tEl.textContent = fmtTime(item);
   if (rEl) rEl.textContent = fmtRemind(item);
   scheduleDetailAutoSave();
@@ -7124,13 +7271,18 @@ function sharedListItemRow(item) {
   ` : "";
   const readMark = item.fromMe && item.read ? `<span class="list-read-mark" aria-label="Прочитано">${ICONS.circleCheck || "✓"}</span>` : "";
   return `
-    <div class="setting list-item-row${done ? " done" : ""}">
-      <div class="shelf-row-main">
-        <div class="name" style="${done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(item.title)}</div>
-        <div class="sub">${esc(item.by)}${item.laterAt ? ` · напомню ${fmtListLater(item.laterAt)}` : ""}</div>
-        ${actions}
+    <div class="swipe list-item-swipe" data-list-item="${esc(item.id)}">
+      <button type="button" class="swipe-del" data-list-del="${esc(item.id)}" tabindex="-1" aria-hidden="true">Удалить</button>
+      <div class="swipe-front">
+        <div class="setting list-item-row${done ? " done" : ""}">
+          <div class="shelf-row-main">
+            <div class="name" style="${done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(item.title)}</div>
+            <div class="sub">${esc(item.by)}${item.laterAt ? ` · напомню ${fmtListLater(item.laterAt)}` : ""}</div>
+            ${actions}
+          </div>
+          ${readMark}
+        </div>
       </div>
-      ${readMark}
     </div>
   `;
 }
@@ -7297,7 +7449,10 @@ function renderLists() {
         ${listTabMenuHtml()}
       </section>
     `;
-    viewEl.querySelector(".list-person-tabs .tab.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (state.listId !== state.listTabScrollId) {
+      viewEl.querySelector(".list-person-tabs .tab.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      state.listTabScrollId = state.listId;
+    }
     if (state.listLaterDraft) mountListLaterWheels(state.listLaterDraft);
     bindListTabLongPress();
     mountShelfMicFab();
@@ -7541,6 +7696,80 @@ const ALARM_DAYS = [
   { d: 0, label: "воскресенье" },
 ];
 
+const ALARM_REPEAT_OPTS = [
+  { id: "once", label: "Однократно" },
+  { id: "daily", label: "Ежедневно" },
+  { id: "weekdays", label: "По будням" },
+];
+
+function alarmRepeatCarouselHtml(mode) {
+  return `
+    <div class="repeat-carousel-stack">
+      <div class="repeat-carousel-frame">
+        <div class="repeat-carousel" id="alarm-repeat-drum" role="listbox" aria-label="Повтор">
+          ${ALARM_REPEAT_OPTS.map(opt => `
+            <div class="repeat-carousel-item${opt.id === mode ? " on" : ""}" data-alarm-repeat="${opt.id}">
+              <span class="repeat-carousel-label">${esc(opt.label)}</span>
+            </div>
+          `).join("")}
+        </div>
+        <div class="repeat-carousel-window" aria-hidden="true"></div>
+      </div>
+    </div>
+  `;
+}
+
+function drumCenteredItem(drum, selector) {
+  const items = [...drum.querySelectorAll(selector)];
+  if (!items.length) return null;
+  const mid = drum.scrollLeft + drum.clientWidth / 2;
+  let best = items[0];
+  let bestDist = Infinity;
+  for (const el of items) {
+    const cx = el.offsetLeft + el.offsetWidth / 2;
+    const dist = Math.abs(cx - mid);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = el;
+    }
+  }
+  return best;
+}
+
+function mountAlarmRepeatCarousel(mode, onPick) {
+  const drum = document.getElementById("alarm-repeat-drum");
+  if (!drum || drum.dataset.mounted === "1") return;
+  drum.dataset.mounted = "1";
+  const centerOn = (id) => {
+    const target = drum.querySelector(`[data-alarm-repeat="${id}"]`) || drum.querySelector(".repeat-carousel-item.on");
+    if (!target) return;
+    drum.scrollLeft = Math.max(0, target.offsetLeft - (drum.clientWidth - target.offsetWidth) / 2);
+  };
+  centerOn(mode);
+  requestAnimationFrame(() => centerOn(mode));
+  let timer = null;
+  let last = mode;
+  drum.addEventListener("scroll", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const on = drumCenteredItem(drum, ".repeat-carousel-item");
+      if (!on) return;
+      const id = on.dataset.alarmRepeat;
+      drum.querySelectorAll(".repeat-carousel-item").forEach(el => el.classList.toggle("on", el === on));
+      if (id === last) return;
+      last = id;
+      onPick(id);
+    }, 60);
+  }, { passive: true });
+  drum.querySelectorAll(".repeat-carousel-item").forEach(el => {
+    el.addEventListener("click", () => {
+      centerOn(el.dataset.alarmRepeat);
+      drum.querySelectorAll(".repeat-carousel-item").forEach(it => it.classList.toggle("on", it === el));
+      onPick(el.dataset.alarmRepeat);
+    });
+  });
+}
+
 function alarmRepeatMode(draft) {
   const r = draft?.repeat;
   if (!r) return "once";
@@ -7597,23 +7826,10 @@ function renderAlarmSettings() {
         </div>
 
         ${state.alarmRepeatPanel ? `
-          <div class="settings-card" style="margin-top:12px">
-            <button type="button" class="setting flat repeat-opt ${mode === "once" ? "on" : ""}" data-alarm-repeat="once">
-              ${mode === "once" ? '<span class="repeat-tick">✓</span>' : '<span class="repeat-tick empty"></span>'}
-              <span class="name">Однократно</span>
-            </button>
-            <button type="button" class="setting flat repeat-opt ${mode === "daily" ? "on" : ""}" data-alarm-repeat="daily">
-              ${mode === "daily" ? '<span class="repeat-tick">✓</span>' : '<span class="repeat-tick empty"></span>'}
-              <span class="name">Ежедневно</span>
-            </button>
-            <button type="button" class="setting flat repeat-opt ${mode === "weekdays" ? "on" : ""}" data-alarm-repeat="weekdays">
-              ${mode === "weekdays" ? '<span class="repeat-tick">✓</span>' : '<span class="repeat-tick empty"></span>'}
-              <span class="name">По будням</span>
-            </button>
-          </div>
-          <div class="settings-card" style="margin-top:12px">
-            <button type="button" class="setting flat ${mode === "custom" || state.alarmDaysPanel ? "on" : ""}" id="alarm-repeat-custom">
-              <span class="name">Настроить</span>
+          <div class="settings-card alarm-repeat-card" style="margin-top:12px">
+            ${alarmRepeatCarouselHtml(mode)}
+            <button type="button" class="setting flat ${mode === "custom" || state.alarmDaysPanel ? "on" : ""}" id="alarm-repeat-custom" style="margin-top:8px">
+              <span class="name">Настроить дни</span>
               <span class="pill soft">›</span>
             </button>
           </div>
@@ -7635,6 +7851,20 @@ function renderAlarmSettings() {
       </div>
     </section>
   `;
+  if (state.alarmRepeatPanel && state.alarmDraft) {
+    mountAlarmRepeatCarousel(mode, (picked) => {
+      const map = { daily: { kind: "daily" }, weekdays: { kind: "weekdays" }, once: null };
+      state.alarmDraft.repeat = map[picked] ?? null;
+      state.alarmDaysPanel = false;
+      scheduleAlarmAutoSave();
+      const sub = document.querySelector("#alarm-repeat-open .sub");
+      if (sub) {
+        sub.textContent = picked === "once" ? "Однократно"
+          : picked === "daily" ? "Ежедневно"
+            : "По будням";
+      }
+    });
+  }
 }
 
 /* —— actions —— */
@@ -8054,14 +8284,24 @@ function buildDetailPatch(item) {
     : (document.getElementById("f-title")?.value ?? item.title ?? "");
   const body = {
     title,
-    place: isCare || isHealth ? "" : (placeEl?.value || ""),
-    who: isCare || isHealth ? "" : (whoEl?.value || ""),
-    phone: isCare || isHealth ? "" : (phoneEl?.value || ""),
+    place: isCare || isHealth || isMeterItem(item) ? "" : (placeEl?.value || ""),
+    who: isCare || isHealth || isMeterItem(item) ? "" : (whoEl?.value || ""),
+    phone: isCare || isHealth || isMeterItem(item) ? "" : (phoneEl?.value || ""),
     carePart: isCare ? carePartOf(item) : item.carePart,
     healthPart: isHealth ? healthPartOf(item) : item.healthPart,
     remind: isCare ? 0 : item.remind,
     repeat: item.repeat || null,
+    yearly: Boolean(item.yearly),
   };
+  if (item.type === "bday") {
+    const by = Number(document.getElementById("f-birth-year")?.value);
+    body.birthYear = Number.isFinite(by) && by >= 1900 ? by : null;
+  }
+  if (isMeterItem(item)) {
+    body.monthWindow = meterMonthWindow(item);
+    body.push = item.push !== false;
+  }
+  if (Number.isFinite(item.extraRemind)) body.extraRemind = item.extraRemind;
   if (isHealth) {
     body.note = document.getElementById("f-health-note")?.value || "";
   } else if (!isCare && noteEl) {
@@ -8353,6 +8593,10 @@ document.addEventListener("input", event => {
   }
   if (SHELF_PREF_FIELD_IDS.has(t.id)) scheduleShelfPrefsAutoSave();
   if (DETAIL_FIELD_IDS.has(t.id)) scheduleDetailAutoSave();
+  if (t.id === "f-birth-year") {
+    const ageEl = document.getElementById("val-age");
+    if (ageEl) ageEl.textContent = fullAgeFromBirthYear(t.value) || "—";
+  }
   if (t.id === "alarm-desc" && state.alarmDraft) {
     state.alarmDraft = { ...state.alarmDraft, title: t.value.trim() || "Будильник" };
     scheduleAlarmAutoSave();
@@ -8682,6 +8926,8 @@ document.addEventListener("click", async event => {
     state.listInviteOpen = false;
     state.listTabMenu = null;
     state.listId = id;
+    state.listTabScrollId = null;
+    state.listTabScrollId = null;
     state.listInviteDraft = null;
     saveSharedListDefault(id);
     return refreshState().then(() => {
@@ -9123,6 +9369,20 @@ document.addEventListener("click", async event => {
       absorb(await api(`/items/${id}`, { method: "PATCH", body: { enabled: item.enabled === false } }));
       state.shelf = "alarms";
       renderAlarmsShelf(state.screen === "daily");
+    } catch (err) { toast(err.message); }
+    return;
+  }
+
+  const meterPush = event.target.closest("[data-meter-push]");
+  if (meterPush) {
+    event.preventDefault();
+    event.stopPropagation();
+    const id = meterPush.dataset.meterPush;
+    const item = state.items.find(i => i.id === id);
+    if (!item) return;
+    try {
+      absorb(await api(`/items/${id}`, { method: "PATCH", body: { push: item.push === false } }));
+      renderDaily();
     } catch (err) { toast(err.message); }
     return;
   }
@@ -9677,8 +9937,58 @@ document.addEventListener("click", async event => {
     const key = detailAdd.dataset.detailAdd;
     if (state.detailShow && key in state.detailShow) {
       state.detailShow[key] = true;
+      if (key === "extraPush") {
+        const item = currentItem();
+        if (item && !Number.isFinite(item.extraRemind)) item.extraRemind = item.remind || 1440;
+      }
       return renderDetail();
     }
+  }
+
+  const detailDel = event.target.closest("[data-detail-del]");
+  if (detailDel) {
+    const key = detailDel.dataset.detailDel;
+    const item = currentItem();
+    if (!item || !state.detailShow) return;
+    if (key === "extraPush") {
+      item.extraRemind = null;
+      state.detailShow.extraPush = false;
+    } else if (key in item) {
+      item[key] = "";
+      state.detailShow[key] = false;
+    }
+    scheduleDetailAutoSave();
+    return renderDetail();
+  }
+
+  if (event.target.closest("#meters-done")) {
+    const item = currentItem();
+    if (!item || !isMeterItem(item)) return;
+    const d = item.date || todayParts();
+    let month = d.month + 1;
+    let year = d.year;
+    if (month > 11) { month = 0; year += 1; }
+    try {
+      absorb(await api(`/items/${item.id}`, {
+        method: "PATCH",
+        body: {
+          date: { year, month, day: meterMonthWindow(item).fromDay },
+        },
+      }));
+      toast("Показания внесены — напомню в следующем месяце");
+      return go("daily", { shelf: "meters" });
+    } catch (err) { toast(err.message); }
+    return;
+  }
+
+  const listDel = event.target.closest("[data-list-del]");
+  if (listDel && state.screen === "lists" && state.listId) {
+    try {
+      const data = await api(`/lists/${state.listId}/items/${listDel.dataset.listDel}`, { method: "DELETE" });
+      absorbSharedLists(data);
+      renderLists();
+    } catch (err) { toast(err.message); }
+    return;
   }
 
   const chip = event.target.closest("[data-chip]");

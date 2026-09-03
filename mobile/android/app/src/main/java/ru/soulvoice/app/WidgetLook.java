@@ -63,7 +63,7 @@ final class WidgetLook {
                 parseColor(snap.optString("surface", ""), FALLBACK_SURFACE),
                 parseColor(snap.optString("ink", ""), FALLBACK_INK),
                 parseColor(snap.optString("inkMuted", ""), FALLBACK_INK_MUTED),
-                snap.optString("palette", "stone"),
+                snap.optString("palette", "smoke"),
                 snap.optString("theme", "light")
         );
     }

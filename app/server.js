@@ -498,6 +498,11 @@ function makeItem(ownerId, draft, settings = {}) {
     vibrate: draft.vibrate !== false,
     melody: String(draft.melody || "default").slice(0, 40),
     yearly: Boolean(draft.yearly),
+    birthYear: Number.isFinite(draft.birthYear) ? Math.max(1900, Math.min(Number(draft.birthYear), 2100)) : null,
+    monthWindow: draft.monthWindow && Number.isFinite(draft.monthWindow.fromDay) && Number.isFinite(draft.monthWindow.toDay)
+      ? { fromDay: Math.max(1, Math.min(28, Number(draft.monthWindow.fromDay))), toDay: Math.max(1, Math.min(31, Number(draft.monthWindow.toDay))) }
+      : null,
+    extraRemind: Number.isFinite(draft.extraRemind) ? Math.max(0, Math.min(Number(draft.extraRemind), 7 * 1440)) : null,
     repeat: normalizeRepeat(draft.repeat),
     // Курс лечения: до какого дня повторяется и сколько приёмов уже отмечено.
     until: normalizeDate(draft.until),
@@ -1967,6 +1972,19 @@ route("PATCH", /^\/api\/items\/([\w-]+)$/, async (ctx) => {
   if (typeof b.melody === "string") item.melody = b.melody.trim().slice(0, 40) || "default";
   if (Number.isFinite(b.snooze)) item.snooze = Math.max(1, Math.min(Number(b.snooze), 180));
   if ("repeat" in b) item.repeat = normalizeRepeat(b.repeat);
+  if (typeof b.yearly === "boolean") item.yearly = b.yearly;
+  if ("birthYear" in b) {
+    item.birthYear = Number.isFinite(b.birthYear) ? Math.max(1900, Math.min(Number(b.birthYear), 2100)) : null;
+  }
+  if ("monthWindow" in b && b.monthWindow && typeof b.monthWindow === "object") {
+    item.monthWindow = {
+      fromDay: Math.max(1, Math.min(28, Number(b.monthWindow.fromDay) || 15)),
+      toDay: Math.max(1, Math.min(31, Number(b.monthWindow.toDay) || 26)),
+    };
+  }
+  if ("extraRemind" in b) {
+    item.extraRemind = Number.isFinite(b.extraRemind) ? Math.max(0, Math.min(Number(b.extraRemind), 7 * 1440)) : null;
+  }
   if (typeof b.done === "boolean") item.done = b.done;
   if (typeof b.type === "string" && ["task", "meeting", "buy", "note", "bday", "sport", "care", "bills", "health", "custom", "alarm"].includes(b.type)) {
     item.type = b.type;
@@ -2443,7 +2461,7 @@ route("POST", /^\/api\/settings$/, async (ctx) => {
   if (Number.isFinite(b.morningHour)) s.morningHour = Math.max(4, Math.min(Math.round(Number(b.morningHour)), 12));
   if (typeof b.alarmSound === "string") s.alarmSound = alarmSoundId(b.alarmSound);
   if (typeof b.notifySound === "string") s.notifySound = notifySoundId(b.notifySound);
-  for (const key of ["alarmMeetings", "eveningReview", "keepAudio", "morningBrief", "careRoutineV1", "careRoutineV2", "healthRoutineV1", "healthRoutineV2", "healthRoutineV3"]) {
+  for (const key of ["alarmMeetings", "eveningReview", "keepAudio", "morningBrief", "careRoutineV1", "careRoutineV2", "healthRoutineV1", "healthRoutineV2", "healthRoutineV3", "metersPresetV1"]) {
     if (typeof b[key] === "boolean") s[key] = b[key];
   }
   if (Array.isArray(b.healthDaysOff)) {
