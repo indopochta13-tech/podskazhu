@@ -917,16 +917,20 @@ const METERS_PRESET = [
 let metersSeedBusy = false;
 async function ensureMetersPreset() {
   if (!state.user || metersSeedBusy) return false;
-  if (state.user.settings?.metersPresetV1) return false;
-  if (shelfItems("meters").length) {
-    absorb(await api("/settings", { method: "POST", body: { metersPresetV1: true } }));
+  const existing = shelfItems("meters");
+  const titles = new Set(existing.map(i => String(i.title || "").trim().toLowerCase()));
+  const missing = METERS_PRESET.filter(row => !titles.has(row.title.toLowerCase()));
+  if (!missing.length) {
+    if (!state.user.settings?.metersPresetV1) {
+      absorb(await api("/settings", { method: "POST", body: { metersPresetV1: true } }));
+    }
     return false;
   }
   metersSeedBusy = true;
   try {
     const now = todayParts();
     const baseDate = { year: now.year, month: now.month, day: 15 };
-    for (const row of METERS_PRESET) {
+    for (const row of missing) {
       await api("/items", {
         method: "POST",
         body: {
@@ -953,10 +957,21 @@ async function ensureMetersPreset() {
   }
 }
 
-function fullAgeFromBirthYear(year) {
-  const y = Number(year);
-  if (!Number.isFinite(y) || y < 1900 || y > new Date().getFullYear()) return "";
-  return String(new Date().getFullYear() - y);
+function fullAgeFromBirthYear(year, birthday) {
+  const y = Number(String(year ?? "").trim());
+  if (!Number.isFinite(y) || y < 1900) return "";
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  if (y > currentYear) return "";
+  let age = currentYear - y;
+  if (birthday && Number.isFinite(birthday.month) && Number.isFinite(birthday.day)) {
+    const month = birthday.month;
+    const day = birthday.day;
+    const nowMonth = now.getMonth();
+    const nowDay = now.getDate();
+    if (nowMonth < month || (nowMonth === month && nowDay < day)) age -= 1;
+  }
+  return age >= 0 ? String(age) : "";
 }
 
 function isMeterItem(item) {
@@ -1270,9 +1285,9 @@ function watchWidgetPin({ timeoutMs = 20000 } = {}) {
 // Редакция согласия и правил. Должна совпадать с CONSENT_VERSION на сервере.
 const CONSENT_VERSION = "2026-08-31";
 // Версия интерфейса: уходит в обращения в поддержку, чтобы понимать, что у человека стоит.
-const APP_VERSION = "1.9.74";
+const APP_VERSION = "1.9.75";
 // Версия service worker и ?v= у app.js — должны совпадать с sw.js и index.html.
-const SW_VERSION = 152;
+const SW_VERSION = 153;
 const AUTO_SAVE_MS = 400;
 const DETAIL_FIELD_IDS = new Set([
   "f-title", "f-care-step", "f-care-product", "f-health-note",
@@ -5798,14 +5813,19 @@ function itemCard(item, opts = {}) {
     const note = item.title && item.title !== "Будильник" ? item.title : "";
     const meta = [alarmRepeatLabel(item), note].filter(Boolean).join(" · ");
     return `
-      <button type="button" class="card-row alarm-day-row ${on ? "" : "off"}" data-alarm-open="${item.id}">
-        <div class="alarm-day-time">${time}</div>
-        <div class="alarm-day-body">
-          <div class="title">Будильник</div>
-          ${meta ? `<div class="meta">${esc(meta)}</div>` : ""}
+      <div class="swipe alarm-swipe ${state.highlightId === item.id ? "flash" : ""}" data-item="${item.id}">
+        <button class="swipe-del" data-del="${item.id}" tabindex="-1" aria-hidden="true">Удалить</button>
+        <div class="swipe-front">
+          <button type="button" class="card-row alarm-day-row ${on ? "" : "off"}" data-alarm-open="${item.id}">
+            <div class="alarm-day-time">${time}</div>
+            <div class="alarm-day-body">
+              <div class="title">Будильник</div>
+              ${meta ? `<div class="meta">${esc(meta)}</div>` : ""}
+            </div>
+            <span class="alarm-day-bell" aria-hidden="true">${ICONS.bell}</span>
+          </button>
         </div>
-        <span class="alarm-day-bell" aria-hidden="true">${ICONS.bell}</span>
-      </button>
+      </div>
     `;
   }
   if (item.careSummary) {
@@ -5966,9 +5986,10 @@ function currentItem() {
 
 function detailShowFields(item) {
   if (state.detailShowItemId !== item.id || !state.detailShow) {
+    const isBday = item.type === "bday";
     state.detailShow = {
-      who: Boolean(String(item.who || "").trim()),
-      place: Boolean(String(item.place || "").trim()),
+      who: isBday || Boolean(String(item.who || "").trim()),
+      place: !isBday && Boolean(String(item.place || "").trim()),
       phone: Boolean(String(item.phone || "").trim()),
       note: Boolean(String(item.note || "").trim()),
       extraPush: Number.isFinite(item.extraRemind),
@@ -6074,7 +6095,7 @@ function renderDetail() {
           </label>
           <div class="field detail-plate detail-age-plate">
             <span>Полных лет</span>
-            <div class="detail-age-val" id="val-age">${esc(fullAgeFromBirthYear(item.birthYear) || "—")}</div>
+            <div class="detail-age-val" id="val-age">${esc(fullAgeFromBirthYear(item.birthYear, item.date) || "—")}</div>
           </div>
         </div>` : ""}
         `}
@@ -6124,7 +6145,7 @@ function renderDetail() {
           </div>
         </div>` : ""}
 
-        ${isHealth || isMeter ? "" : `
+        ${isHealth || isMeter || isBday ? "" : `
         <div class="pick-block ${state.picker === "repeat" ? "open" : ""}">
           <button class="pick-head" type="button" data-pick="repeat">
             <span class="lab">Повтор</span>
@@ -6141,12 +6162,12 @@ function renderDetail() {
         `}
 
         ${slimCard ? "" : `
-        ${show?.who ? detailSwipeRow(`
+        ${(isBday || show?.who) ? detailSwipeRow(`
         <label class="field">
           <span>Участник</span>
           <input id="f-who" value="${esc(item.who || "")}" placeholder="Иван Петров" />
         </label>`, "who") : ""}
-        ${show?.place ? detailSwipeRow(`
+        ${!isBday && show?.place ? detailSwipeRow(`
         <label class="field">
           <span>Место</span>
           <input id="f-place" value="${esc(item.place || "")}" placeholder="Ленина 15" />
@@ -6161,10 +6182,10 @@ function renderDetail() {
           <span>Заметка</span>
           <textarea id="f-note" rows="4" maxlength="2000" placeholder="Подробности">${esc(item.note || "")}</textarea>
         </label>`, "note") : ""}
-        ${(!isMeter && (!show?.who || !show?.place || !show?.phone || !show?.note || !show?.extraPush)) ? `
+        ${(!isMeter && (!show?.phone || !show?.note || !show?.extraPush || (!isBday && (!show?.who || !show?.place)))) ? `
         <div class="detail-add-row">
-          ${!show?.who ? `<button type="button" class="chip ghost" data-detail-add="who">+ участник</button>` : ""}
-          ${!show?.place ? `<button type="button" class="chip ghost" data-detail-add="place">+ место</button>` : ""}
+          ${!isBday && !show?.who ? `<button type="button" class="chip ghost" data-detail-add="who">+ участник</button>` : ""}
+          ${!isBday && !show?.place ? `<button type="button" class="chip ghost" data-detail-add="place">+ место</button>` : ""}
           ${!show?.phone ? `<button type="button" class="chip ghost" data-detail-add="phone">+ телефон</button>` : ""}
           ${!show?.note ? `<button type="button" class="chip ghost" data-detail-add="note">+ заметка</button>` : ""}
           ${!show?.extraPush ? `<button type="button" class="chip ghost" data-detail-add="extraPush">+ пуш</button>` : ""}
@@ -8296,6 +8317,8 @@ function buildDetailPatch(item) {
   if (item.type === "bday") {
     const by = Number(document.getElementById("f-birth-year")?.value);
     body.birthYear = Number.isFinite(by) && by >= 1900 ? by : null;
+    body.yearly = true;
+    body.repeat = { kind: "yearly" };
   }
   if (isMeterItem(item)) {
     body.monthWindow = meterMonthWindow(item);
@@ -8595,7 +8618,7 @@ document.addEventListener("input", event => {
   if (DETAIL_FIELD_IDS.has(t.id)) scheduleDetailAutoSave();
   if (t.id === "f-birth-year") {
     const ageEl = document.getElementById("val-age");
-    if (ageEl) ageEl.textContent = fullAgeFromBirthYear(t.value) || "—";
+    if (ageEl) ageEl.textContent = fullAgeFromBirthYear(t.value, currentItem()?.date) || "—";
   }
   if (t.id === "alarm-desc" && state.alarmDraft) {
     state.alarmDraft = { ...state.alarmDraft, title: t.value.trim() || "Будильник" };

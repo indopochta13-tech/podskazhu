@@ -4233,9 +4233,14 @@ html.vc-native {
   color: var(--ink);
 }
 .detail-swipe { margin-bottom: 10px; }
+.detail-swipe .swipe-front {
+  background: var(--bg);
+  border-radius: var(--radius);
+}
 .detail-swipe .field { margin-bottom: 0; }
 .alarm-swipe { margin-bottom: 8px; }
 .alarm-swipe .alarm-card { width: 100%; margin-bottom: 0; }
+.alarm-swipe .alarm-day-row { width: 100%; margin-bottom: 0; }
 .list-item-swipe { margin-bottom: 0; }
 .list-item-swipe .list-item-row { margin-bottom: 0; }
 .wheels-compact .wheel { max-height: 120px; }

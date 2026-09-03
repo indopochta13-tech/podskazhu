@@ -26,7 +26,9 @@ check("REPEATS: ежегодно первым", /label: "ежегодно"/.test
 check("meters preset titles", /METERS_PRESET/.test(appJs) && /Свет/.test(appJs) && /Газ/.test(appJs));
 check("perm dot hint removed", !/perm-dot-hint/.test(appJs));
 check("alarm repeat carousel", /repeat-carousel/.test(appJs));
-check("shell 152", /SW_VERSION = 152/.test(appJs));
+check("shell 153", /SW_VERSION = 153/.test(appJs));
+check("meters preset migration", /missing = METERS_PRESET\.filter/.test(appJs));
+check("bday repeat hidden", /isHealth \|\| isMeter \|\| isBday \? "" :/.test(appJs));
 
 if (failed) {
   console.log(`\n${failed} проверок не прошло`);
