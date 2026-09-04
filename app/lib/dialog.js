@@ -37,6 +37,29 @@ export function rememberDialog(user, payload) {
   if ("pendingConfirm" in payload) nlu.pendingConfirm = payload.pendingConfirm;
 }
 
+/**
+ * Убрать текст из памяти диалога.
+ *
+ * Названия лекарств и средств сервер забывает по просьбе приложения. Но фраза
+ * оседает ещё и здесь: в слотах прошлого хода, в вопросе на подтверждение и в
+ * снимке для «не то». Ids и расписание оставляем — откат последнего действия
+ * продолжает работать, название всё равно живёт на телефоне.
+ */
+export function scrubDialogText(user, fields) {
+  const nlu = ensureNlu(user);
+  const wipe = obj => {
+    if (!obj || typeof obj !== "object") return;
+    for (const f of fields) {
+      if (typeof obj[f] === "string" && obj[f]) obj[f] = "";
+    }
+  };
+  wipe(nlu.lastSlots);
+  wipe(nlu.pendingConfirm);
+  wipe(nlu.pendingConfirm?.draft);
+  for (const snap of nlu.lastAction?.snapshots || []) wipe(snap.before);
+  wipe(nlu.lastAction?.draft);
+}
+
 export function clearPendingConfirm(user) {
   const nlu = ensureNlu(user);
   nlu.pendingConfirm = null;
@@ -76,6 +99,7 @@ export function undoLastAction(user, dbItems) {
       const item = dbItems[id];
       if (!item || item.ownerId !== user.id) continue;
       item.cancelled = true;
+      item.deleted = true;
       item.updatedAt = Date.now();
       restored.push(item);
     }
@@ -117,6 +141,7 @@ export function snapshotItem(item) {
       shelf: item.shelf,
       needsTime: item.needsTime,
       cancelled: item.cancelled,
+      deleted: item.deleted,
       done: item.done,
       repeat: item.repeat ? { ...item.repeat } : null,
     },
@@ -127,6 +152,24 @@ export function snapshotItem(item) {
  * Эллипсис: короткая догонка к прошлой фразе.
  * «а на Тимирязевской», «на 11», «лучше завтра».
  */
+/**
+ * Слова, с которых начинается новая запись, а не уточнение предыдущей.
+ *
+ * «Таймер» здесь потому, что «таймер на 10 минут выключить курицу» после
+ * «таймер на 5 минут чай» попадало под правило сдвига («на 10 минут») и
+ * переносило первый таймер вместо того, чтобы поставить второй. Перенос
+ * говорят иначе — «перенеси таймер», — и такая фраза сюда не доходит:
+ * у неё intent move.
+ */
+const NEW_ENTITY_RE = /(?:таймер|встреч|созвон|митинг|купи(?:ть)?|напомн|будильник|тренир|задач|заметк|день\s+рожден|запиш|добав|запланир|назнач)/iu;
+
+/**
+ * Названия, за которыми нет записи: разбор поставил их за неимением лучшего.
+ * «Без названия» — когда во фразе одни слоты («в три», «завтра»); остальное —
+ * мычание в ответ на вопрос, а не новое дело.
+ */
+const GENERIC_TITLE_RE = /^(?:без названия|встреча|созвон|дело|задача|заметка|завтра|сегодня|послезавтра|не знаю|не помню|всё равно|все равно|любое|любой|как хочешь|как угодно|наверное)$/iu;
+
 export function looksLikeEllipsis(text, parseResult) {
   const clean = String(text || "").replace(/\s+/g, " ").trim();
   if (!clean || clean.length > 72) return false;
@@ -138,15 +181,12 @@ export function looksLikeEllipsis(text, parseResult) {
   // Чистый сдвиг: «пораньше», «на полчаса позже».
   if (/^(?:пораньше|попозже|позднее)$/iu.test(clean)) return true;
   if (/^на\s+.+\s+(?:позже|раньше|вперед|назад)$/iu.test(clean) && clean.split(/\s+/).length <= 6) return true;
-  if (parseResult?.shift != null && clean.split(/\s+/).length <= 6
-    && !/(?:встреч|созвон|купи|напомн|будильник|задач|заметк)/iu.test(clean)) {
-    return true;
-  }
-
   // Новая сущность словами — не эллипсис, даже если title слабый («Встреча»).
-  if (/(?:встреч|созвон|митинг|купи(?:ть)?|напомн|будильник|тренир|задач|заметк|день\s+рожден|запиш|добав|запланир|назнач)/iu.test(clean)) {
-    return false;
-  }
+  // Проверяем до правила сдвига: «таймер на 10 минут» — это «на 10 минут»
+  // по форме, но новая запись по смыслу.
+  if (NEW_ENTITY_RE.test(clean)) return false;
+
+  if (parseResult?.shift != null && clean.split(/\s+/).length <= 6) return true;
 
   if (parseResult?.intent !== "create" || !parseResult.drafts?.length) return false;
   const d = parseResult.drafts[0];
@@ -155,13 +195,33 @@ export function looksLikeEllipsis(text, parseResult) {
   const placeNorm = String(d.place || "").toLowerCase();
   const weakTitle = !title
     || titleNorm.length < 3
-    || /^(встреча|созвон|дело|задача|заметка|завтра|сегодня|послезавтра|без названия)$/iu.test(titleNorm)
+    || GENERIC_TITLE_RE.test(titleNorm)
     || (placeNorm && (titleNorm === placeNorm || titleNorm === `на ${placeNorm}`));
 
   const words = clean.split(/\s+/).length;
   // Короткая фраза только со слотами: «на 11», «на Тимирязевской», «завтра в 15».
   if (weakTitle && words <= 6 && (d.time || d.place || d.who || (d.date && !d.needsTime) || parseResult.shift != null)) return true;
   return false;
+}
+
+/**
+ * Фраза читается как отдельная запись, а не как ответ на вопрос.
+ *
+ * Приложение спросило «Во сколько?», а человек сказал «купить хлеб» — он уже
+ * переключился на другое. Раньше незаконченная встреча в этот момент
+ * записывалась без времени и оставалась висеть; теперь по этому признаку её
+ * отменяют, а разбирают новую фразу.
+ *
+ * Ответ про время («в три», «вечером», «завтра») разбор кладёт в слоты,
+ * а названия ему взять неоткуда — оно выходит пустым или дежурным.
+ */
+export function looksLikeNewRecord(parseResult) {
+  if (parseResult?.intent !== "create") return false;
+  const draft = parseResult.drafts?.[0];
+  if (!draft) return false;
+  const title = String(draft.title || "").trim();
+  if (title.length < 3) return false;
+  return !GENERIC_TITLE_RE.test(title.toLowerCase());
 }
 
 /** Слить слоты эллипсиса в патч для applyMove / create. */

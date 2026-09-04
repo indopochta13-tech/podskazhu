@@ -202,7 +202,6 @@ function grantProUntil(user, until, purchaseId, productId, extra = {}) {
   billing.updatedAt = Date.now();
   if (extra.familySubId) billing.familySubId = extra.familySubId;
   if (extra.familyOwnerId) billing.familyOwnerId = extra.familyOwnerId;
-  if (extra.autoRenew != null) billing.autoRenew = extra.autoRenew;
   // Чистим демо только при самой первой оплате. Повторная подписка и restore-purchases
   // не должны отменять записи, которые человек вёл месяцами.
   if (!wasActive && !userHadProPurchase(user)) clearProShelfData(user, db.items);
@@ -314,37 +313,41 @@ export function pendingPaymentRow(paymentId) {
 
 function grantFamilySubscription(row, paymentId) {
   const term = familyTermById(row.productId);
-  const base = Math.max(Date.now(), 0);
   const payer = db.users[row.payerId || row.userId];
   if (!payer) return "no_user";
 
-  const payerUntil = Math.max(Number(ensureBilling(payer).until || 0), base);
-  const granted = payerUntil + term.days * DAY;
+  // Семейная подписка — это несколько купленных подписок, а не одна с довеском:
+  // ПРО получают ровно те, чьи ID перечислены и посчитаны в сумме. Свой ID
+  // плательщик вписывает наравне с остальными, и в форме он подставлен первым.
+  const beneficiaryIds = [...new Set(row.beneficiaryIds || [])];
+  const payerIsMember = beneficiaryIds.includes(payer.id);
+  // Продление до срока складывается только тому, кто продлевает себе.
+  const base = payerIsMember
+    ? Math.max(Date.now(), Number(ensureBilling(payer).until || 0))
+    : Date.now();
+  const granted = base + term.days * DAY;
   const subId = nextId("fs");
 
   const sub = {
     id: subId,
     payerId: payer.id,
-    beneficiaryIds: [...(row.beneficiaryIds || [])],
+    beneficiaryIds,
     beneficiaryCodes: [...(row.beneficiaryCodes || [])],
     termId: term.id,
     termMonths: term.months,
     until: granted,
     paymentId,
-    autoRenew: true,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
   ensureFamilySubs()[subId] = sub;
 
-  const ids = new Set([payer.id, ...(row.beneficiaryIds || [])]);
-  for (const uid of ids) {
+  for (const uid of beneficiaryIds) {
     const u = db.users[uid];
     if (!u) continue;
     grantProUntil(u, granted, paymentId, term.id, {
       familySubId: subId,
       familyOwnerId: payer.id,
-      autoRenew: uid === payer.id,
     });
   }
 
@@ -359,7 +362,7 @@ function grantFamilySubscription(row, paymentId) {
   };
   save();
   console.info("[billing] семейная Prodamus: payer=%s sub=%s n=%s pid=%s",
-    payer.id, subId, ids.size, paymentId);
+    payer.id, subId, beneficiaryIds.length, paymentId);
   return "succeeded";
 }
 
@@ -420,7 +423,12 @@ function activeFamilySubForUser(user) {
   if (billing.familySubId && ensureFamilySubs()[billing.familySubId]) {
     return ensureFamilySubs()[billing.familySubId];
   }
-  return null;
+  // Плательщик мог купить только другим и сам в список не входить: своей
+  // подписки у него нет, но карточка «Семья» с её сроком — его.
+  const own = familySubsForPayer(user.id)
+    .filter(s => Number(s.until || 0) > Date.now())
+    .sort((a, b) => Number(b.until || 0) - Number(a.until || 0));
+  return own[0] || null;
 }
 
 export function restorePurchasesForUser(user) {
@@ -436,15 +444,16 @@ export function restorePurchasesForUser(user) {
     restored += 1;
   }
 
+  // Оплаченная семейная подписка возвращается тем же, кому выдавалась:
+  // только перечисленным ID, плательщику — лишь если он себя вписал.
   for (const sub of familySubsForPayer(user.id)) {
     if (Number(sub.until || 0) <= now) continue;
-    for (const uid of new Set([sub.payerId, ...(sub.beneficiaryIds || [])])) {
+    for (const uid of new Set(sub.beneficiaryIds || [])) {
       const u = db.users[uid];
       if (!u) continue;
       grantProUntil(u, sub.until, sub.paymentId || sub.id, sub.termId || "family_1m", {
         familySubId: sub.id,
         familyOwnerId: sub.payerId,
-        autoRenew: uid === sub.payerId ? sub.autoRenew !== false : false,
       });
       restored += 1;
     }
@@ -452,20 +461,6 @@ export function restorePurchasesForUser(user) {
 
   if (restored) save();
   return restored;
-}
-
-export function cancelFamilySubscription(user) {
-  const sub = activeFamilySubForUser(user);
-  if (!sub || sub.payerId !== user.id) {
-    return { ok: false, error: "Нет активной семейной подписки" };
-  }
-  sub.autoRenew = false;
-  sub.updatedAt = Date.now();
-  const billing = ensureBilling(user);
-  billing.autoRenew = false;
-  billing.updatedAt = Date.now();
-  save();
-  return { ok: true, sub };
 }
 
 export function billingState(user) {
@@ -482,7 +477,6 @@ export function billingState(user) {
       id: fam.id,
       until: fam.until,
       memberCount: (fam.beneficiaryIds || []).length,
-      autoRenew: fam.autoRenew !== false,
       isOwner: fam.payerId === user.id,
     } : null,
   };
@@ -495,7 +489,6 @@ export function dropSubscription(user) {
   billing.productId = "";
   billing.familySubId = "";
   billing.familyOwnerId = "";
-  billing.autoRenew = false;
   billing.updatedAt = Date.now();
   save();
   return planFor(user);

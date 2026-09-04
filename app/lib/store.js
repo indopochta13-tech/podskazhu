@@ -441,7 +441,9 @@ function defaultShelfPref(shelfId, settings = {}) {
     return { remind: 0, push: false, alarm: true, snooze: 1 };
   }
   // Платёж напоминает за сутки: за минуту до срока платить уже поздно.
-  if (shelfId === "bills") {
+  // Счётчики — тоже: показания сдают до конца окна, и напоминание в самый
+  // день срока оставляет человеку несколько часов вместо суток.
+  if (shelfId === "bills" || shelfId === "meters") {
     return { remind: 1440, push: true, alarm: false, snooze: 60 };
   }
   // Лекарство — ровно в час приёма, без запаса.

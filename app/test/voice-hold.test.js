@@ -14,9 +14,12 @@ function check(label, ok, detail) {
 
 console.log("Удержание микрофона\n");
 
+// Проверяем именно микрофон: pointerleave на других кнопках (например, долгое
+// нажатие на вкладку общего списка) удержание записи не трогает.
+const micHold = app.slice(app.indexOf("dataset.holdBound"), app.indexOf("dataset.holdBound") + 3000);
 check("shelf-mic не отменяет запись по pointerleave",
-  !app.includes('addEventListener("pointerleave"'),
-  "pointerleave на кнопке обрывает удержание");
+  app.indexOf("dataset.holdBound") >= 0 && !micHold.includes('addEventListener("pointerleave"'),
+  "pointerleave на кнопке микрофона обрывает удержание");
 
 check("чат-mic на схеме удержания, полка — click",
   app.includes('#shelf-mic, #chat-mic') && app.includes("dataset.holdBound")

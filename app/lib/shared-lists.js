@@ -52,7 +52,12 @@ function pendingInvitesFrom(userId) {
   return Object.values(db.listInvites).filter(i => i.fromId === userId && i.status === "pending");
 }
 
+/** Как подписан человек, которого в списке больше нет. */
+const LEFT_LABEL = "Участник вышел";
+
 function nicknameFor(viewer, pair, otherId) {
+  // Собеседник удалил аккаунт: список и записи остались, подписывать нечем.
+  if (!otherId) return LEFT_LABEL;
   return pair.nicknames?.[viewer.id]?.[otherId]
     || (viewer.contacts || []).find(c => c.userId === otherId)?.label
     || db.users[otherId]?.code
@@ -518,10 +523,31 @@ export async function tickSharedLaterReminders(now) {
   if (dirty) save();
 }
 
+/**
+ * Человек удалил аккаунт — из общих списков уходит он, а не список.
+ *
+ * Раньше пара удалялась целиком, и вместе с ушедшим пропадали строки
+ * оставшегося: он платит за общие списки и в одно утро находит пустой экран.
+ * Теперь убираем из участников только его, его строки обезличиваем, а список
+ * удаляем, когда живых участников не осталось.
+ */
 export function purgeSharedForUser(userId) {
   for (const [id, pair] of Object.entries(db.lists || {})) {
     if (!pair.members?.includes(userId)) continue;
-    delete db.lists[id];
+    pair.members = pair.members.filter(m => m !== userId);
+    for (const item of pair.items || []) {
+      // Строку оставляем — она уже часть общего дела, но кто её добавил,
+      // после удаления аккаунта знать не нужно.
+      if (item.addedBy === userId) item.addedBy = null;
+      if (Array.isArray(item.readBy)) item.readBy = item.readBy.filter(r => r !== userId);
+    }
+    if (pair.nicknames) {
+      delete pair.nicknames[userId];
+      for (const map of Object.values(pair.nicknames)) delete map[userId];
+    }
+    if (pair.unread) delete pair.unread[userId];
+    pair.updatedAt = Date.now();
+    if (!pair.members.length) delete db.lists[id];
   }
   ensureListInvites();
   for (const [id, invite] of Object.entries(db.listInvites)) {

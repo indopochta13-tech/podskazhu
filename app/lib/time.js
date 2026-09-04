@@ -93,12 +93,21 @@ export function addDays({ year, month, day }, delta) {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth(), day: d.getUTCDate() };
 }
 
-export function addMonths({ year, month, day }, delta) {
+/**
+ * Плюс месяц с оглядкой на исходное число.
+ *
+ * Платёж 31-го после февраля навсегда становился платежом 28-го: обрезанный
+ * день становился новой точкой отсчёта. Поэтому считаем не от прошлого
+ * срабатывания, а от числа, которое человек назвал: `anchorDay`. В коротком
+ * месяце берём последний день, в следующем длинном — снова своё число.
+ */
+export function addMonths({ year, month, day }, delta, anchorDay = null) {
   const first = new Date(Date.UTC(year, month + delta, 1));
   const y = first.getUTCFullYear();
   const m = first.getUTCMonth();
   const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-  return { year: y, month: m, day: Math.min(day, lastDay) };
+  const wanted = Number.isFinite(anchorDay) && anchorDay >= 1 ? anchorDay : day;
+  return { year: y, month: m, day: Math.min(wanted, lastDay) };
 }
 
 export function weekdayOf({ year, month, day }) {

@@ -19,6 +19,8 @@ import {
   snapshotItem,
   looksLikeEllipsis,
   ellipsisPatch,
+  scrubDialogText,
+  looksLikeNewRecord,
 } from "./lib/dialog.js";
 import { safeZone, zonedParts, itemUtc, remindUtc, addDays, addMonths, weekdayOf, compareDates, zonedToUtc } from "./lib/time.js";
 import { normalizeSportPlan, normalizeSportNotify, sportDayHasWorkout, defaultSportPlan } from "./public/sport-plan.js";
@@ -39,7 +41,6 @@ import { isHeavy } from "./public/voice.js";
 import {
   billingState,
   billingTestMode,
-  cancelFamilySubscription,
   createFamilyPendingPayment,
   createPendingPayment,
   familyPriceBreakdown,
@@ -53,6 +54,7 @@ import {
 } from "./lib/billing.js";
 import { itemOnProShelf } from "./lib/pro-shelves.js";
 import { clearProShelfData, stripFreeUserRoutineSeed } from "./lib/pro-cleanup.js";
+import { looksPrivate, itemPrivateText, PRIVATE_TEXT_FIELDS } from "./public/private-words.js";
 import * as pdm from "./lib/prodamus.js";
 import { alarmSoundId, notifySoundId } from "./public/sounds-catalog.js";
 import { addUserMessage, markDelivered, markRead, pruneSupport, supportSummary, threadView } from "./lib/support.js";
@@ -361,6 +363,12 @@ function normalizeRepeat(value) {
   // «каждые две недели» — шаг больше одного.
   const every = Number(value.every);
   if (Number.isFinite(every) && every > 1) repeat.every = Math.min(Math.round(every), 12);
+  // Ежемесячный помнит своё число: иначе после февраля платёж 31-го
+  // навсегда переезжает на 28-е.
+  if (value.kind === "monthly") {
+    const day = Number(value.day);
+    if (Number.isInteger(day) && day >= 1 && day <= 31) repeat.day = day;
+  }
   // «по вторникам и четвергам» — несколько дней недели в одном повторе.
   if (value.kind === "weekly" && Array.isArray(value.days)) {
     const days = [...new Set(value.days.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b);
@@ -381,7 +389,7 @@ function stepRepeat(date, repeat) {
     return next;
   }
   if (repeat.kind === "weekly") return addDays(date, 7 * every);
-  if (repeat.kind === "monthly") return addMonths(date, every);
+  if (repeat.kind === "monthly") return addMonths(date, every, repeat.day);
   if (repeat.kind === "daily") return addDays(date, every);
   let next = addDays(date, 1);
   if (repeat.kind === "weekdays") {
@@ -408,8 +416,16 @@ function isTimerItem(item) {
 
 // Сдвигает повторяющуюся запись на следующий раз в будущем.
 // У курса лечения есть последний день: дальше него запись не уезжает, а закрывается.
+/** Ежемесячный повтор держится числа, которое назвал человек. */
+function anchorMonthlyRepeat(item) {
+  if (item?.repeat?.kind !== "monthly" || !item.date) return;
+  if (!Number.isInteger(item.repeat.day)) item.repeat.day = item.date.day;
+}
+
 function advanceRepeat(item, tz) {
   if (!item.repeat || !item.date) return false;
+  // Старые записи числа не помнят: закрепляем текущее, чтобы дальше не съезжало.
+  anchorMonthlyRepeat(item);
   const now = zonedParts(Date.now(), tz);
   let date = item.date;
   for (let guard = 0; guard < 500; guard += 1) {
@@ -526,6 +542,9 @@ function makeItem(ownerId, draft, settings = {}) {
     remindedAt: null,
     alarmedAt: null,
     createdAt: now,
+    // Когда расписание ставили в последний раз: по нему видно, был ли срок
+    // в будущем в тот момент. Заново проставляется при правке даты и времени.
+    scheduledAt: now,
     updatedAt: now,
   };
   // Своя полка по словам из конструктора важнее вшитых (встречи, покупки, спорт…).
@@ -564,6 +583,7 @@ function makeItem(ownerId, draft, settings = {}) {
     const nowParts = zonedParts(Date.now(), tz);
     item.date = { year: nowParts.year, month: nowParts.month, day: nowParts.day };
   }
+  anchorMonthlyRepeat(item);
   db.items[item.id] = item;
   return item;
 }
@@ -593,6 +613,19 @@ function standsAt(item, date, time) {
   return true;
 }
 
+/** Записи, стоящие в пределах часа от названного времени. Ближайшая — первой. */
+function standsNearTime(items, date, time, withinMin = 60) {
+  if (!time) return [];
+  const asked = time.hour * 60 + time.minute;
+  return items
+    .filter(i => i.time && (!date || (i.date
+      && i.date.year === date.year && i.date.month === date.month && i.date.day === date.day)))
+    .map(i => ({ item: i, diff: Math.abs(i.time.hour * 60 + i.time.minute - asked) }))
+    .filter(x => x.diff > 0 && x.diff <= withinMin)
+    .sort((a, b) => a.diff - b.diff)
+    .map(x => x.item);
+}
+
 const ARCHIVE_AFTER_MS = 30 * 86400000;
 
 /** Полки «на постоянку» (спорт, уход, ЖКХ…) — в архив не складываем. */
@@ -606,6 +639,25 @@ function canArchiveItem(item) {
   if (NO_ARCHIVE_TYPES.has(item.type)) return false;
   // Без даты — бессрочная заметка/покупка, не «прошедшая по времени».
   if (!item.date) return false;
+  return true;
+}
+
+/**
+ * Человек удалил запись.
+ *
+ * cancelled прячет запись, но уборщик в tick смотрит на deleted — и записи,
+ * удалённые обычной кнопкой, оставались на диске навсегда, хотя политика
+ * обещает стереть их через 30 дней. Отмечаем обе: cancelled — «не показывать»,
+ * deleted — «стереть, когда пройдёт срок на возврат».
+ *
+ * Отмена по другим причинам (потеря подписки, замена шаблона, дубли счётчиков)
+ * ставит только cancelled: такие записи должны возвращаться.
+ */
+function deleteItem(item, now = Date.now()) {
+  if (!item) return false;
+  item.cancelled = true;
+  item.deleted = true;
+  item.updatedAt = now;
   return true;
 }
 
@@ -634,8 +686,24 @@ function shouldArchiveNow(item, now, tz) {
   if (item.remindedAt || item.alarmedAt) {
     if (eventTs == null || eventTs <= now) return true;
   }
-  if (eventTs != null && now - eventTs >= 45 * 1000) return true;
-  return false;
+  if (eventTs == null || now - eventTs < 45 * 1000) return false;
+  // Срок, который был в прошлом уже в момент записи, саму запись не закрывает.
+  // «Напомни сегодня в девять», сказанное в час дня, уезжало в архив
+  // выполненным через сорок пять секунд: ассистент обещал напомнить, а запись
+  // исчезала и напоминание не приходило. Про такое время мы спрашиваем
+  // отдельно, а запись оставляем человеку на виду.
+  const setAt = Number(item.scheduledAt || item.createdAt || 0);
+  if (setAt && eventTs < setAt - 60 * 1000) return false;
+  return true;
+}
+
+/** Срок записи уже прошёл в тот момент, когда его ставили. */
+function scheduledInThePast(item, tz, now = Date.now()) {
+  if (!item?.date || !item?.time) return false;
+  if (item.repeat || item.yearly || item.timer) return false;
+  if (item.done || item.archived || item.cancelled) return false;
+  const eventTs = itemUtc(item, tz);
+  return eventTs != null && now - eventTs > 60 * 1000;
 }
 
 function migrateDoneToArchive(item) {
@@ -673,6 +741,11 @@ function stateFor(user) {
   }
   if (dirty) save();
 
+  // Подписки нет — платные полки закрыты, и отдавать их содержимое незачем:
+  // в приложении на них всё равно экран «в подписке», а телефон по этому
+  // списку ставит локальные напоминания и звонил бы по закрытым полкам.
+  // Записи при этом не трогаем: оферта обещает, что они дождутся оплаты.
+  const pro = isPro(user);
   const items = itemsOf(user.id)
     .filter(i => !i.cancelled)
     // Старые done без архива (повторы и «постоянные» полки) — по-прежнему прячем через 30 дней.
@@ -680,7 +753,8 @@ function stateFor(user) {
       if (i.archived) return true;
       return !(i.done && !i.repeat && now - (i.updatedAt || i.createdAt) > ARCHIVE_AFTER_MS);
     })
-    .map(i => describeItem(i, settings));
+    .map(i => describeItem(i, settings))
+    .filter(i => pro || !itemOnProShelf(i));
 
   touchPresence(user);
   const observation = pickObservation(user);
@@ -1046,42 +1120,34 @@ function proShelfMessage(shelf) {
   return `${what} — в подписке. Записи там ведутся сами: напомнят, посчитают дни, покажут историю.`;
 }
 
-function createItemsFromDrafts(user, drafts, text, settings, shelfHint, pool, nowMs) {
-  // Отсечённые подпиской черновики запоминаем, а не выбрасываем молча.
-  //
-  // Раньше они просто исчезали, и человек слышал «Не расслышала, повтори».
-  // Он повторял, слышал то же самое и решал, что распознавание сломано —
-  // так и не узнав, что функция платная. Терялся и пользователь, и продажа.
-  const blockedByPro = [];
-  if (!isPro(user)) {
-    const allowed = [];
-    for (const d of drafts || []) {
-      if (itemOnProShelf({ type: d.type, shelf: d.shelf || shelfHint })) blockedByPro.push(d);
-      else allowed.push(d);
-    }
-    drafts = allowed;
+const VOICE_TWIN_MS = 30 * 60 * 1000;
+
+const relatedText = (a, b) => {
+  if (!a || !b) return false;
+  return a === b || a.startsWith(b) || b.startsWith(a);
+};
+
+const isTimeless = (x) => !x?.time;
+
+function sameWhenLoose(item, draft, age) {
+  if (sameDayAndTime(item, draft)) return true;
+  if (age <= VOICE_TWIN_MS && isTimeless(item) && isTimeless(draft)
+      && ((!item.date && draft.date) || (item.date && !draft.date)
+        || (item.date && draft.date && compareDates(item.date, draft.date) === 0))) {
+    return true;
   }
-  const created = [];
-  const duplicates = [];
-  const VOICE_TWIN_MS = 30 * 60 * 1000;
+  return false;
+}
 
-  const relatedText = (a, b) => {
-    if (!a || !b) return false;
-    return a === b || a.startsWith(b) || b.startsWith(a);
-  };
-
-  const isTimeless = (x) => !x?.time;
-  const sameWhenLoose = (item, draft, age) => {
-    if (sameDayAndTime(item, draft)) return true;
-    if (age <= VOICE_TWIN_MS && isTimeless(item) && isTimeless(draft)
-        && ((!item.date && draft.date) || (item.date && !draft.date)
-          || (item.date && draft.date && compareDates(item.date, draft.date) === 0))) {
-      return true;
-    }
-    return false;
-  };
-
-  const findTwin = (draft, draftTitle) => pool.find(i => {
+/**
+ * Уже записанная такая же вещь.
+ *
+ * Вынесено из createItemsFromDrafts: то же самое нужно знать до вопроса
+ * «Во сколько?». Иначе повтор фразы, которая уже записана, снова спрашивал
+ * время вместо честного «такое уже есть».
+ */
+function findTwinItem(pool, draft, draftTitle, text, nowMs) {
+  return (pool || []).find(i => {
     const age = nowMs - (i.createdAt || 0);
     if (!sameWhenLoose(i, draft, age)) return false;
     const t = normalizeTitle(i.title);
@@ -1093,6 +1159,52 @@ function createItemsFromDrafts(user, drafts, text, settings, shelfHint, pool, no
     if (relatedText(src, normalizeTitle(text))) return true;
     return false;
   });
+}
+
+/**
+ * То же самое, но уже со временем.
+ *
+ * Перед вопросом «Во сколько?» черновик заведомо без часа, а записанная минуту
+ * назад вещь час уже имеет — общий поиск близнеца их не сводит. Здесь час и не
+ * важен: если человек только что записал «приготовить курицу» на завтра и
+ * повторил фразу, спрашивать время заново незачем. За пределами получаса
+ * не смотрим — там повтор фразы уже похож на новую запись, а не на обрывок.
+ */
+function findFreshSameThing(pool, draft, draftTitle, text, nowMs) {
+  return (pool || []).find(i => {
+    if (nowMs - (i.createdAt || 0) > VOICE_TWIN_MS) return false;
+    const sameDay = (!i.date && !draft.date)
+      || (i.date && draft.date && compareDates(i.date, draft.date) === 0);
+    if (!sameDay) return false;
+    return relatedText(normalizeTitle(i.title), draftTitle)
+      || relatedText(normalizeTitle(i.source || ""), normalizeTitle(text));
+  });
+}
+
+function createItemsFromDrafts(user, drafts, text, settings, shelfHint, pool, nowMs) {
+  // Отсечённые подпиской черновики запоминаем, а не выбрасываем молча.
+  //
+  // Раньше они просто исчезали, и человек слышал «Не расслышала, повтори».
+  // Он повторял, слышал то же самое и решал, что распознавание сломано —
+  // так и не узнав, что функция платная. Терялся и пользователь, и продажа.
+  const blockedByPro = [];
+  if (!isPro(user)) {
+    const allowed = [];
+    for (const d of drafts || []) {
+      // Полку считаем ту же, что и при создании: по типу черновика её видно не
+      // всегда. «Проверять счётчики» — обычная задача по типу, а ложится на
+      // платную полку счётчиков, и раньше такая запись у человека без подписки
+      // создавалась молча. Теперь он слышит, что раздел в подписке.
+      const shelf = previewShelf(d, settings, shelfHint, text);
+      if (itemOnProShelf({ type: d.type, shelf })) blockedByPro.push(d);
+      else allowed.push(d);
+    }
+    drafts = allowed;
+  }
+  const created = [];
+  const duplicates = [];
+
+  const findTwin = (draft, draftTitle) => findTwinItem(pool, draft, draftTitle, text, nowMs);
 
   const absorbRelated = (keeper, draft, draftTitle) => {
     let changed = false;
@@ -1347,20 +1459,83 @@ async function handleCapture(user, body) {
       };
     }
 
-    // Ответ не по делу — записываем черновик без времени и разбираем фразу дальше.
     clearPendingConfirm(user);
-    const poolEarly = activeItems(user.id).filter(i => !i.done);
-    const early = createItemsFromDrafts(
-      user,
-      [{ ...savedDraft, needsTime: false }],
-      sourceText,
-      settings,
-      shelfHint,
-      poolEarly,
-      Date.now(),
-    );
-    earlyCreated = early.created;
-    if (earlyCreated.length) maybeLateNight(user, tz);
+    // Вместо ответа — другое дело.
+    //
+    // «Встреча с Иваном» → «Во сколько?» → «купить хлеб». Человек переключился,
+    // и незаконченная встреча ему уже не нужна: раньше она записывалась без
+    // времени и оставалась висеть в списке. Отличаем ответ от нового дела по
+    // разбору: время и дата ложатся в слоты, а названия у них нет — значит
+    // название есть только у настоящей новой записи.
+    const asNew = parse(text, { now: Date.now(), tz, settings });
+    if (!looksLikeNewRecord(asNew)) {
+      // Мычание в ответ («не знаю», «наверное») — не повод терять встречу и не
+      // повод заводить дело с таким названием: записываем без времени и на этом
+      // заканчиваем, саму фразу дальше не разбираем.
+      const poolEarly = activeItems(user.id).filter(i => !i.done);
+      const { created } = createItemsFromDrafts(
+        user,
+        [{ ...savedDraft, needsTime: false }],
+        sourceText,
+        settings,
+        shelfHint,
+        poolEarly,
+        Date.now(),
+      );
+      if (created.length) {
+        rememberDialog(user, {
+          action: { kind: "created", itemIds: created.map(i => i.id), snapshots: [] },
+          itemIds: created.map(i => i.id),
+          slots: pending.slots || null,
+        });
+        maybeLateNight(user, tz);
+      }
+      save();
+      return {
+        kind: "created",
+        message: createdMessage(user, created, tz, sourceText),
+        items: created.map(i => describeItem(i, settings)),
+      };
+    }
+    // Новое дело: незаконченный черновик отменяем и разбираем свежую фразу.
+    save();
+  } else if (pending && pending.intent === "past_time") {
+    const item = db.items[pending.itemId];
+    const alive = item && item.ownerId === user.id && !item.cancelled;
+    if (isYesPhrase(text)) {
+      clearPendingConfirm(user);
+      if (!alive) {
+        save();
+        return { kind: "not_found", message: sayFor(user, "not_found") };
+      }
+      const snap = snapshotItem(item);
+      item.date = addDays(item.date, 1);
+      item.remindedAt = null;
+      item.alarmedAt = null;
+      item.scheduledAt = Date.now();
+      item.updatedAt = Date.now();
+      rememberDialog(user, {
+        action: { kind: "moved", itemIds: [item.id], snapshots: [snap] },
+        itemIds: [item.id],
+      });
+      save();
+      return {
+        kind: "moved",
+        message: sayFor(user, "moved", varsForItem(item, tz), "moved"),
+        items: [describeItem(item, settings)],
+      };
+    }
+    if (isNoPhrase(text)) {
+      clearPendingConfirm(user);
+      save();
+      return {
+        kind: "created",
+        message: "Оставил на сегодня. Напоминание не придёт — время позади.",
+        items: alive ? [describeItem(item, settings)] : [],
+      };
+    }
+    // Не да и не нет — запись уже создана, разбираем фразу дальше.
+    clearPendingConfirm(user);
   } else if (pending) {
     if (isYesPhrase(text)) {
       clearPendingConfirm(user);
@@ -1371,8 +1546,7 @@ async function handleCapture(user, body) {
       }
       const snap = snapshotItem(item);
       if (pending.intent === "cancel") {
-        item.cancelled = true;
-        item.updatedAt = Date.now();
+        deleteItem(item);
         rememberDialog(user, {
           action: { kind: "cancelled", itemIds: [item.id], snapshots: [snap] },
           itemIds: [item.id],
@@ -1463,6 +1637,42 @@ async function handleCapture(user, body) {
       }
     }
 
+    // Человек назвал время — значит, оно и есть примета записи.
+    //
+    // Раньше «удали запись на 21:30» при пустом 21:30 доходило до нечёткого
+    // поиска по словам и предлагало отменить «Забрать посылку» на 17:00:
+    // одно «да» стирало запись, о которой человек не говорил. Если на
+    // названное время ничего не стоит — так и отвечаем.
+    if (askedTime && !marked) {
+      const atTime = pool.filter(i => standsAt(i, result.date, askedTime));
+      if (atTime.length) {
+        const byText = scored.filter(x => atTime.includes(x.item));
+        scored = byText.length ? byText : atTime.map(i => ({ item: i, score: 0.5 }));
+      } else {
+        const near = standsNearTime(pool, result.date, askedTime)[0];
+        if (near) {
+          rememberDialog(user, {
+            pendingConfirm: {
+              at: Date.now(), intent: "cancel", itemId: near.id, patch: {}, slots: result.slots,
+            },
+          });
+          save();
+          return {
+            kind: "confirm",
+            message: `На ${hhmm(askedTime)} ничего нет. Вы про «${near.title}» на ${hhmm(near.time)}?`,
+            candidates: [describeItem(near, settings)],
+            intent: "cancel",
+          };
+        }
+        save();
+        return {
+          kind: "not_found",
+          message: `На ${hhmm(askedTime)} ничего нет.`,
+          candidates: pool.slice(0, 4).map(i => describeItem(i, settings)),
+        };
+      }
+    }
+
     // Если цель не названа — берём последнюю из контекста диалога.
     if (!scored.length && getLastItemIds(user).length) {
       const last = db.items[getLastItemIds(user)[0]];
@@ -1545,8 +1755,7 @@ async function handleCapture(user, body) {
     const item = best.item;
     if (result.intent === "cancel") {
       const snap = snapshotItem(item);
-      item.cancelled = true;
-      item.updatedAt = Date.now();
+      deleteItem(item);
       rememberDialog(user, {
         action: { kind: "cancelled", itemIds: [item.id], snapshots: [snap] },
         itemIds: [item.id],
@@ -1584,6 +1793,16 @@ async function handleCapture(user, body) {
     const draft = result.drafts[0];
     if (!draft.time) {
       const shelf = previewShelf(draft, settings, shelfHint, text);
+      const twin = findFreshSameThing(pool, draft, normalizeTitle(draft.title), text, nowMs);
+      if (twin && SHELF_PROFILES[shelf]?.needsTime) {
+        // Такое уже записано — спрашивать время во второй раз незачем.
+        save();
+        return {
+          kind: "duplicate",
+          message: sayFor(user, "duplicate", { когда: twin.date ? fmtWhenVoice(twin, tz) : "раньше" }),
+          items: [describeItem(twin, settings)],
+        };
+      }
       if (SHELF_PROFILES[shelf]?.needsTime) {
         rememberDialog(user, {
           pendingConfirm: {
@@ -1644,6 +1863,25 @@ async function handleCapture(user, body) {
         когда: dup?.date ? fmtWhenVoice(dup, tz) : "раньше",
       }),
       items: duplicates,
+    };
+  }
+
+  // Срок уже прошёл в момент записи: обещать напоминание нечестно,
+  // а закрывать запись за человека — тем более. Спрашиваем.
+  const late = created.length === 1 && scheduledInThePast(created[0], tz, nowMs)
+    ? created[0]
+    : null;
+  if (late) {
+    rememberDialog(user, {
+      pendingConfirm: { at: Date.now(), intent: "past_time", itemId: late.id, slots: result.slots },
+    });
+    save();
+    return {
+      kind: "confirm",
+      message: `Это время сегодня уже прошло. Поставить «${late.title}» на завтра?`,
+      candidates: [describeItem(late, settings)],
+      items: created.map(i => describeItem(i, settings)),
+      intent: "past_time",
     };
   }
 
@@ -2022,11 +2260,27 @@ route("PATCH", /^\/api\/items\/([\w-]+)$/, async (ctx) => {
   if (scheduleChanged) {
     item.remindedAt = null;
     item.alarmedAt = null;
+    item.scheduledAt = Date.now();
+  }
+  // Дату или повтор поменяли — ежемесячный запоминает новое число.
+  if ("date" in b || "repeat" in b) {
+    if (item.repeat?.kind === "monthly" && !Number.isInteger(b.repeat?.day)) delete item.repeat.day;
+    anchorMonthlyRepeat(item);
   }
   item.updatedAt = Date.now();
   if (!("shelf" in b) || !item.shelf) item.shelf = shelfFor(item, ctx.user.settings || {});
   save();
-  return { status: 200, body: { item: describeItem(item, ctx.user.settings || {}), ...stateFor(ctx.user) } };
+  // Время перевели назад: раньше запись после такой правки молча закрывалась
+  // выполненной и напоминание не приходило. Теперь она остаётся на полке,
+  // а человеку говорим, что срок уже позади.
+  const tzNow = safeZone(ctx.user.settings?.tz);
+  const notice = scheduleChanged && scheduledInThePast(item, tzNow)
+    ? "Это время уже прошло — напоминание не придёт. Поставьте другое."
+    : undefined;
+  return {
+    status: 200,
+    body: { item: describeItem(item, ctx.user.settings || {}), notice, ...stateFor(ctx.user) },
+  };
 });
 
 route("POST", /^\/api\/care\/seed$/, async (ctx) => {
@@ -2261,7 +2515,7 @@ route("POST", /^\/api\/meters\/seed$/, async (ctx) => {
     item.repeat = normalizeRepeat({ kind: "monthly" });
     item.monthWindow = monthWindow;
     item.push = true;
-    item.remind = prefs.remind ?? 1440;
+    item.remind = prefs.remind;
     if (!item.date) item.date = baseDate;
     if (!item.time) item.time = { hour: 10, minute: 0 };
     item.updatedAt = Date.now();
@@ -2277,7 +2531,7 @@ route("POST", /^\/api\/meters\/seed$/, async (ctx) => {
       title: row.title,
       date: baseDate,
       time: { hour: 10, minute: 0 },
-      remind: prefs.remind ?? 1440,
+      remind: prefs.remind,
       remindExplicit: true,
       push: true,
       repeat: { kind: "monthly" },
@@ -2347,18 +2601,35 @@ route("POST", /^\/api\/health\/time$/, async (ctx) => {
  */
 route("POST", /^\/api\/items\/forget-titles$/, async (ctx) => {
   const ids = Array.isArray(ctx.body?.ids) ? ctx.body.ids.slice(0, 100) : [];
-  const PRIVATE = new Set(["health", "care"]);
+  const PRIVATE_SHELVES = new Set(["health", "care"]);
   let n = 0;
   for (const id of ids) {
     const item = db.items[String(id)];
     if (!item || item.ownerId !== ctx.user.id) continue;
-    if (!PRIVATE.has(item.shelf || item.type)) continue;
+    // Полка — не единственный признак: «принимать флуоксетин 20 мг» уезжает
+    // в дела, а название препарата хранить у себя мы всё равно не должны.
+    const onPrivateShelf = PRIVATE_SHELVES.has(item.shelf || item.type);
+    if (!onPrivateShelf && !looksPrivate(itemPrivateText(item))) continue;
     // Пустая строка, а не удаление поля: список должен рисоваться и без названия.
-    if (item.title) { item.title = ""; n += 1; }
-    if (item.note) item.note = "";
-    if (item.place) item.place = "";
+    // Чистим все текстовые поля разом — раньше исходная фраза в source
+    // переживала забывание, и название лекарства оставалось на сервере.
+    let touched = false;
+    for (const field of PRIVATE_TEXT_FIELDS) {
+      if (item[field]) { item[field] = ""; touched = true; }
+    }
+    if (touched) {
+      // По этой отметке приложение знает, что название живёт на телефоне,
+      // даже когда по самой записи этого уже не видно.
+      item.forgotten = true;
+      n += 1;
+    }
   }
-  if (n) save();
+  if (n) {
+    // Фраза оседает не только в записи: слоты прошлого хода, вопрос на
+    // подтверждение и снимок для «не то» тоже держат название.
+    scrubDialogText(ctx.user, PRIVATE_TEXT_FIELDS);
+    save();
+  }
   return { status: 200, body: { forgotten: n } };
 });
 
@@ -2367,10 +2638,12 @@ route("POST", /^\/api\/items\/([\w-]+)\/cancel$/, async (ctx) => {
   if (!item || item.ownerId !== ctx.user.id) return { status: 404, body: { error: "Не найдено" } };
   // Тело `{ cancelled: false }` возвращает запись обратно — на этом держится «Вернуть»
   // после случайного смахивания. Без тела запись отменяется, как было раньше.
-  item.cancelled = ctx.body?.cancelled !== false;
-  if (item.cancelled) {
-    item.archived = false;
+  if (ctx.body?.cancelled === false) {
+    item.cancelled = false;
     item.deleted = false;
+  } else {
+    item.archived = false;
+    deleteItem(item);
   }
   item.updatedAt = Date.now();
   save();
@@ -2488,8 +2761,7 @@ route("POST", /^\/api\/items\/([\w-]+)\/reply$/, async (ctx) => {
   }
 
   if (REPLY_CANCEL_RE.test(text)) {
-    item.cancelled = true;
-    item.updatedAt = Date.now();
+    deleteItem(item);
     save();
     return { status: 200, body: { message: sayFor(ctx.user, "cancelled", {}, "cancelled"), ...stateFor(ctx.user) } };
   }
@@ -2506,8 +2778,7 @@ route("POST", /^\/api\/items\/([\w-]+)\/reply$/, async (ctx) => {
     };
   }
   if (result.intent === "cancel") {
-    item.cancelled = true;
-    item.updatedAt = Date.now();
+    deleteItem(item);
     save();
     return { status: 200, body: { message: sayFor(ctx.user, "cancelled", {}, "cancelled"), ...stateFor(ctx.user) } };
   }
@@ -2758,8 +3029,7 @@ route("POST", /^\/api\/block$/, async (ctx) => {
   // Присланное этим человеком, но ещё не принятое, убираем сразу.
   for (const item of itemsOf(ctx.user.id)) {
     if (item.status === "pending" && item.from?.code === target.code) {
-      item.cancelled = true;
-      item.updatedAt = Date.now();
+      deleteItem(item);
     }
   }
   save();
@@ -2801,9 +3071,8 @@ route("POST", /^\/api\/items\/([\w-]+)\/report$/, async (ctx) => {
   };
   db.reports[report.id] = report;
 
-  item.cancelled = true;
+  deleteItem(item);
   item.reported = true;
-  item.updatedAt = Date.now();
 
   if (ctx.body?.block) {
     ctx.user.blocked = Array.isArray(ctx.user.blocked) ? ctx.user.blocked : [];
@@ -2812,8 +3081,7 @@ route("POST", /^\/api\/items\/([\w-]+)\/report$/, async (ctx) => {
     }
     for (const other of itemsOf(ctx.user.id)) {
       if (other.status === "pending" && other.from?.code === item.from.code) {
-        other.cancelled = true;
-        other.updatedAt = Date.now();
+        deleteItem(other);
       }
     }
   }
@@ -3124,12 +3392,6 @@ route("POST", /^\/api\/billing\/restore-purchases$/, async (ctx) => {
   return { status: 200, body: { restored, ...billingState(ctx.user) } };
 });
 
-route("POST", /^\/api\/billing\/cancel-family$/, async (ctx) => {
-  const res = cancelFamilySubscription(ctx.user);
-  if (!res.ok) return { status: 400, body: res };
-  return { status: 200, body: { ok: true, ...billingState(ctx.user) } };
-});
-
 // Приложение для телефона живёт на своём origin, поэтому API открыт только для него.
 // Сайт в браузере обращается к своему же серверу, и заголовки CORS ему не нужны.
 const APP_ORIGINS = new Set([
@@ -3322,8 +3584,13 @@ async function tick() {
   for (const user of Object.values(db.users)) {
     const tz = safeZone(user.settings?.tz);
     const items = byOwner.get(user.id) || [];
+    // Подписка кончилась — платные полки закрыты, и звонить по ним нечестно:
+    // человек получал пуш «Интернет · 700 ₽», открывал его и упирался в
+    // предложение купить подписку.
+    const pro = isPro(user);
 
     for (const item of items) {
+      if (!pro && itemOnProShelf(item)) continue;
       if (item.yearly) {
         const eventTs = itemUtc(item, tz);
         if (eventTs != null && eventTs < now - 36 * 3600000) {

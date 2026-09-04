@@ -12,6 +12,7 @@ import {
   isDemoItemId,
 } from "/demo-shelves.js";
 import { PRO_SHELF_PROMO } from "/pro-shelf-promo.js";
+import { looksPrivate, itemPrivateText } from "/private-words.js";
 import {
   SPORT_WEEK_ORDER,
   SPORT_DAY_LABELS,
@@ -818,7 +819,7 @@ async function addManualShelfItem(shelfId, opts = {}) {
 
   // Ручное добавление на полки витаминов и косметики: название забираем
   // в телефон сразу, как и при записи голосом.
-  if (PRIVATE_SHELVES.has(created.shelf || created.type) && draft.title) {
+  if (shouldForget({ ...created, title: draft.title }) && draft.title) {
     privateTitles.set(created.id, draft.title);
     api("/items/forget-titles", { method: "POST", body: { ids: [created.id] } })
       .catch(() => {});
@@ -1112,6 +1113,27 @@ function idbToken(value, remove = false) {
  */
 const PRIVATE_SHELVES = new Set(["health", "care"]);
 
+/**
+ * Название этой записи живёт только на телефоне.
+ *
+ * Полка «Витамины» и «Уход» — очевидный случай. Но «принимать флуоксетин
+ * 20 мг» уезжает в дела, и сервер такое название тоже забывает: отметку
+ * forgotten он ставит сам, по ней запись узнаётся и после того, как
+ * забывать стало нечего.
+ */
+function isPrivateItem(item) {
+  if (!item) return false;
+  if (PRIVATE_SHELVES.has(item.shelf || item.type)) return true;
+  return item.forgotten === true;
+}
+
+/** Стоит ли просить сервер забыть эту запись. */
+function shouldForget(item) {
+  if (!item) return false;
+  if (PRIVATE_SHELVES.has(item.shelf || item.type)) return true;
+  return looksPrivate(itemPrivateText(item));
+}
+
 const privateTitles = {
   read() {
     try {
@@ -1164,11 +1186,13 @@ const privateTitles = {
 function itemTitle(item) {
   if (!item) return "";
   const shelf = item.shelf || item.type;
-  if (!PRIVATE_SHELVES.has(shelf)) return item.title || "";
+  if (!isPrivateItem(item)) return item.title || "";
   const local = privateTitles.get(item.id);
   if (local) return local;
   if (item.title) return item.title;
-  return shelf === "health" ? "Приём — впишите название" : "Средство — впишите название";
+  if (shelf === "health") return "Приём — впишите название";
+  if (shelf === "care") return "Средство — впишите название";
+  return "Название осталось на прежнем телефоне";
 }
 
 const store = {
@@ -1407,7 +1431,7 @@ const state = {
   billing: null,
   billingBusy: false,
   billingPendingId: "",
-  familyDraft: { ids: [""], term: "family_1m", validation: {}, quote: null, quoteBusy: false },
+  familyDraft: { ids: [""], term: "family_1m", validation: {}, quote: null, quoteBusy: false, seeded: false },
   familyUiOpen: false,
   familyScrollBottom: false,
   billingPlanOpen: null,
@@ -1729,6 +1753,10 @@ async function api(path, { method = "GET", body, timeout = 20000, raw = false, a
 
 function absorb(data) {
   if (!data) return;
+  // Сервер иногда предупреждает о том, чего человек не ждал: например, что
+  // время, которое он только что поставил, уже прошло. Раньше запись в таком
+  // случае молча закрывалась, и сказать было нечего.
+  if (data.notice) toast(data.notice);
   if (data.user) state.user = data.user;
   if (Array.isArray(data.items)) {
     state.items = data.items;
@@ -1740,7 +1768,7 @@ function absorb(data) {
     // молча — человеку об этом знать незачем.
     const toForget = [];
     for (const item of state.items) {
-      if (!PRIVATE_SHELVES.has(item.shelf || item.type)) continue;
+      if (!shouldForget(item)) continue;
       if (item.title && !privateTitles.get(item.id)) {
         privateTitles.set(item.id, item.title);
         toForget.push(item.id);
@@ -1753,7 +1781,10 @@ function absorb(data) {
           // Не вышло — заберём при следующей загрузке. Названия уже в телефоне.
         });
     }
-    privateTitles.keepOnly(state.items.map(i => i.id));
+    // Чистим память названий только когда список полный. Без подписки сервер
+    // не отдаёт платные полки, и уборка стёрла бы с телефона названия
+    // витаминов и косметики — вернуть их после оплаты было бы неоткуда.
+    if (isPro()) privateTitles.keepOnly(state.items.map(i => i.id));
   }
   if (Array.isArray(data.incoming)) state.incoming = data.incoming;
   if (Array.isArray(data.contacts)) state.contacts = data.contacts;
@@ -4023,6 +4054,24 @@ function familyDraftCodes() {
   return state.familyDraft.ids.map(c => String(c || "").trim().toUpperCase()).filter(Boolean);
 }
 
+/**
+ * Свой ID — первой строкой.
+ *
+ * Семейная подписка — это несколько купленных подписок. Раньше плательщик
+ * вписывал только родню, платил за них и получал свою даром: сервер выдавал
+ * ПРО и ему тоже. Теперь ПРО получают ровно перечисленные, поэтому свой ID
+ * должен стоять в списке сразу — иначе человек заплатит и останется без
+ * подписки. Строку можно убрать, если он покупает только другим.
+ */
+function seedFamilyDraft() {
+  const code = state.user?.code;
+  if (!code || state.familyDraft.seeded) return;
+  const filled = familyDraftCodes();
+  if (!filled.length) state.familyDraft.ids = [code];
+  state.familyDraft.seeded = true;
+  refreshFamilyQuote();
+}
+
 function familyAllValid() {
   const codes = familyDraftCodes();
   if (!codes.length) return false;
@@ -4108,9 +4157,7 @@ function familySubBlockHtml() {
         <div class="pay-card-body compact-body">
           <div class="family-actions">
             <button class="btn ghost block" type="button" data-family-renew ${busy ? "disabled" : ""}>Продлить</button>
-            ${fam.autoRenew !== false
-              ? `<button class="btn ghost block" type="button" id="family-cancel" ${busy ? "disabled" : ""}>Отменить автопродление</button>`
-              : `<div class="hint">Автопродление отключено</div>`}
+            <div class="hint">Подписка действует до конца оплаченного срока. Сама не продлевается — продлите, когда захотите.</div>
           </div>
         </div>` : ""}
       </div>`;
@@ -4129,7 +4176,7 @@ function familySubBlockHtml() {
           placeholder="ID участника" data-family-id="${i}" value="${esc(code)}" />
         <span class="family-id-check ${markCls}" aria-hidden="true">${mark}</span>
         ${discHtml}
-        ${draft.ids.length > 1 ? `<button type="button" class="icon-btn" data-family-rm="${i}" aria-label="Убрать">${ICONS.close}</button>` : ""}
+        <button type="button" class="icon-btn" data-family-rm="${i}" aria-label="Убрать">${ICONS.close}</button>
       </div>`;
   }).join("");
 
@@ -4412,22 +4459,6 @@ async function buyFamilySubscription() {
     saveBillingPendingId(res.payment_id);
     window.open(res.confirmation_url, "_blank", "noopener");
     startBillingPoll(res.payment_id);
-  } catch (err) {
-    toast(err.message);
-  } finally {
-    state.billingBusy = false;
-    if (billingOnSettings()) patchSettingsSubscription();
-    else if (state.screen === "settings") renderSettings();
-  }
-}
-
-async function cancelFamilySub() {
-  if (state.billingBusy) return;
-  state.billingBusy = true;
-  try {
-    const res = await api("/billing/cancel-family", { method: "POST", body: {} });
-    state.billing = res;
-    toast("Автопродление отключено");
   } catch (err) {
     toast(err.message);
   } finally {
@@ -8452,7 +8483,7 @@ async function capture(text, source = "text", opts = {}) {
     // их забыть. Сохраняем ДО absorb: если приложение закроют в этот момент,
     // лучше остаться с названием без записи, чем с записью без названия.
     const privateCreated = (data.reply?.items || [])
-      .filter(i => PRIVATE_SHELVES.has(i.shelf || i.type) && i.title);
+      .filter(i => shouldForget(i) && i.title);
     for (const item of privateCreated) privateTitles.set(item.id, item.title);
     if (privateCreated.length) {
       api("/items/forget-titles", {
@@ -8826,7 +8857,7 @@ async function saveDetailItem(opts = {}) {
   // Правку названия витаминов и косметики оставляем в телефоне: на сервер
   // уходит всё остальное — время, повтор, отметки. Иначе название, стёртое
   // при создании, вернулось бы на сервер при первом же редактировании.
-  if (PRIVATE_SHELVES.has(item.shelf || item.type) && "title" in body) {
+  if (isPrivateItem(item) && "title" in body) {
     privateTitles.set(item.id, body.title);
     body.title = "";
   }
@@ -9325,10 +9356,6 @@ document.addEventListener("click", async event => {
     return buyFamilySubscription();
   }
 
-  if (event.target.closest("#family-cancel")) {
-    return cancelFamilySub();
-  }
-
   if (event.target.closest("#family-add-id")) {
     state.familyDraft.ids.push("");
     state.familyScrollBottom = true;
@@ -9362,6 +9389,7 @@ document.addEventListener("click", async event => {
   if (billingPlan) {
     const id = billingPlan.dataset.billingPlan;
     state.billingPlanOpen = state.billingPlanOpen === id ? null : id;
+    if (id === "family" && state.billingPlanOpen === "family") seedFamilyDraft();
     if (billingOnSettings()) return patchBillingProducts();
   }
 

@@ -80,15 +80,26 @@ await withServer(async (api) => {
   check("«неважно» → без времени", dismiss.data?.reply?.kind === "created" && !noTime?.time,
     JSON.stringify({ kind: dismiss.data?.reply?.kind, time: noTime?.time }));
 
-  const ask3 = await voice("созвон с клиентом завтра");
+  // Вместо ответа — другое дело. Незаконченный созвон не дописываем без
+  // времени: человек уже переключился, и запись без часа ему только мешала бы.
+  await voice("созвон с клиентом завтра");
   const offTopic = await voice("купить хлеб");
   const items = offTopic.data?.reply?.items || [];
-  check("не по делу: встреча без времени + покупка",
+  check("не по делу: незаконченный созвон отменён, записана покупка",
     offTopic.data?.reply?.kind === "created"
-    && items.length >= 2
-    && items.some(i => /встреч|созвон|клиент/i.test(i.title) && !i.time)
-    && items.some(i => /хлеб/i.test(i.title)),
+    && items.some(i => /хлеб/i.test(i.title))
+    && !items.some(i => /созвон|клиент/i.test(i.title)),
     JSON.stringify(items.map(i => ({ title: i.title, time: i.time }))));
+
+  // А мычание в ответ созвон не теряет: он остаётся, просто без времени.
+  await voice("созвон с подрядчиком завтра");
+  const mumble = await voice("не знаю");
+  const kept = mumble.data?.reply?.items || [];
+  check("мычание в ответ: запись остаётся без времени",
+    mumble.data?.reply?.kind === "created"
+    && kept.some(i => /подрядчик|созвон/i.test(i.title) && !i.time)
+    && !kept.some(i => /не знаю/i.test(i.title)),
+    JSON.stringify(kept.map(i => ({ title: i.title, time: i.time }))));
 
   const buy = await voice("купить молоко");
   check("покупки: вопроса нет", buy.data?.reply?.kind === "created",

@@ -97,12 +97,15 @@ async function main() {
   const restore = await call("/restore", { method: "POST", body: { key: transferKey, tz: "Europe/Moscow" }, auth: false });
   check("перенос на другой телефон по ключу", restore.status === 200 && restore.data?.token);
 
-  const repeat = await call("/capture", { method: "POST", body: { text: "каждый день в 8 утра витамины" } });
+  // Фраза про витамины уехала на полку «Витамины и лекарства», а она в подписке:
+  // бесплатный аккаунт получал 403 и прогон обрывался. Повтор проверяем на
+  // бесплатной полке — суть проверки та же.
+  const repeat = await call("/capture", { method: "POST", body: { text: "каждый день в 8 утра выносить мусор" } });
   const repeatItem = repeat.data?.reply?.items?.[0];
   check("повтор: каждый день", repeatItem?.repeat?.kind === "daily" && repeatItem?.time?.hour === 8, fmt(repeatItem));
   check("подпись повтора", repeatItem?.repeatLabel === "каждый день", repeatItem?.repeatLabel);
 
-  const dup = await call("/capture", { method: "POST", body: { text: "каждый день в 8 утра витамины" } });
+  const dup = await call("/capture", { method: "POST", body: { text: "каждый день в 8 утра выносить мусор" } });
   check("дубль не создаётся", dup.data?.reply?.kind === "duplicate", dup.data?.reply?.message);
 
   const firstDay = repeatItem.date.day;
@@ -110,7 +113,9 @@ async function main() {
   const advanced = doneRepeat.data?.items?.find(i => i.id === repeatItem.id);
   check("повтор уехал на следующий раз", advanced && advanced.date.day !== firstDay && advanced.done === false, fmt(advanced));
 
-  const twoWeeks = await call("/capture", { method: "POST", body: { text: "каждые две недели проверять счётчики" } });
+  // Счётчики — платная полка, и на бесплатном аккаунте фраза упирается в подписку.
+  // Шаг повтора проверяем на бесплатной полке, час задаём явно — иначе спросят время.
+  const twoWeeks = await call("/capture", { method: "POST", body: { text: "каждые две недели в 10 утра поливать цветы" } });
   const twoWeeksItem = twoWeeks.data?.reply?.items?.[0];
   check("повтор через неделю: шаг сохранён", twoWeeksItem?.repeat?.kind === "weekly" && twoWeeksItem?.repeat?.every === 2, fmt(twoWeeksItem));
   check("подпись шага повтора", twoWeeksItem?.repeatLabel === "каждые две недели", twoWeeksItem?.repeatLabel);
